@@ -25,8 +25,8 @@ with st.sidebar.expander("🏙️ 各城市转化数据", expanded=True):
     stages = ['线索量', '接通数', '有效数', '客户数', '到访数', '成交数']
 
     default_values = {
-        '从化': [21, 19, 17, 8, 4, 0],
-        '中山': [30, 25, 20, 11, 0, 0], 
+        '从化': [21, 19, 17, 8, 4, 2],
+        '中山': [30, 25, 20, 11, 5, 1], 
         '江门': [6, 6, 5, 5, 1, 0]
     }
 
@@ -49,7 +49,7 @@ with st.sidebar.expander("🏙️ 各城市转化数据", expanded=True):
 with st.sidebar.expander("🔍 未转化原因数据", expanded=False):
     
     # 1. 无效线索原因
-    st.subheader("无效线索原因")
+    st.subheader("❌ 无效线索原因")
     invalid_data = {}
     for city in cities:
         st.write(f"**{city}**")
@@ -63,7 +63,7 @@ with st.sidebar.expander("🔍 未转化原因数据", expanded=False):
     st.session_state.reasons_data['invalid'] = invalid_data
 
     # 2. 未转化线索原因
-    st.subheader("未转化线索原因")
+    st.subheader("📞 未转化线索原因")
     not_converted_data = {}
     for city in cities:
         st.write(f"**{city}**")
@@ -77,7 +77,7 @@ with st.sidebar.expander("🔍 未转化原因数据", expanded=False):
     st.session_state.reasons_data['not_converted'] = not_converted_data
 
     # 3. 未转化客户原因
-    st.subheader("未转化客户原因")
+    st.subheader("👥 未转化客户原因")
     not_client_data = {}
     for city in cities:
         st.write(f"**{city}**")
@@ -91,7 +91,7 @@ with st.sidebar.expander("🔍 未转化原因数据", expanded=False):
     st.session_state.reasons_data['not_client'] = not_client_data
 
     # 4. 未到访原因
-    st.subheader("未到访原因")
+    st.subheader("🚫 未到访原因")
     not_visit_data = {}
     for city in cities:
         st.write(f"**{city}**")
@@ -103,6 +103,20 @@ with st.sidebar.expander("🔍 未转化原因数据", expanded=False):
             '其他安排': cols[1].number_input(f"{city}-其他安排", value=0, key=f"not_visit_{city}_4")
         }
     st.session_state.reasons_data['not_visit'] = not_visit_data
+
+    # 5. 未成交原因 - 新增
+    st.subheader("💸 未成交原因")
+    not_deal_data = {}
+    for city in cities:
+        st.write(f"**{city}**")
+        cols = st.columns(2)
+        not_deal_data[city] = {
+            '价格太贵': cols[0].number_input(f"{city}-价格太贵", value=2, key=f"not_deal_{city}_1"),
+            '被竞品抢走': cols[1].number_input(f"{city}-被竞品抢走", value=1, key=f"not_deal_{city}_2"),
+            '资金问题': cols[0].number_input(f"{city}-资金问题", value=1, key=f"not_deal_{city}_3"),
+            '决策延迟': cols[1].number_input(f"{city}-决策延迟", value=0, key=f"not_deal_{city}_4")
+        }
+    st.session_state.reasons_data['not_deal'] = not_deal_data
 
 # ==================== 漏斗图函数定义 ====================
 def create_beautiful_funnel(city_data, city_name, stages):
@@ -117,20 +131,29 @@ def create_beautiful_funnel(city_data, city_name, stages):
     
     colors = color_schemes.get(city_name, px.colors.sequential.Blues)
     
+    # 根据背景色深浅自动选择文字颜色
+    text_colors = []
+    for color in colors[:len(values)]:
+        # 简单的亮度计算，选择对比度足够的文字颜色
+        if color in ['#FF6B6B', '#FF8E8E', '#4ECDC4', '#45B7D1']:
+            text_colors.append("white")
+        else:
+            text_colors.append("black")
+    
     fig = go.Figure(go.Funnel(
         y=stages,
         x=values,
         textposition="inside",
         textinfo="value+percent initial",
-        textfont=dict(size=14, color="white", weight="bold"),
+        textfont=dict(size=12, color=text_colors, weight="bold"),
         marker=dict(
             color=colors[:len(values)],
-            line=dict(width=3, color="white")
+            line=dict(width=2, color="darkgray")
         ),
         connector=dict(
             line=dict(color="rgba(128,128,128,0.5)", width=2, dash="dot")
         ),
-        opacity=0.9
+        opacity=0.85
     ))
     
     fig.update_layout(
@@ -138,14 +161,52 @@ def create_beautiful_funnel(city_data, city_name, stages):
             'text': f"<b>{city_name}转化漏斗</b>",
             'x': 0.5,
             'xanchor': 'center',
-            'font': {'size': 18, 'color': '#2C3E50'}
+            'font': {'size': 16, 'color': '#2C3E50'}
         },
         plot_bgcolor='rgba(248,248,248,0.8)',
         paper_bgcolor='white',
-        font=dict(size=12),
-        height=500,
-        margin=dict(t=80, b=50, l=80, r=50),
+        font=dict(size=11),
+        height=450,
+        margin=dict(t=60, b=40, l=60, r=40),
         showlegend=False
+    )
+    
+    return fig
+
+def create_horizontal_funnel(city_data, city_name, stages):
+    """创建水平漏斗图"""
+    values = city_data
+    
+    horizontal_colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFD700', '#DDA0DD']
+    
+    # 确保数据有效
+    valid_values = [v if v > 0 else 0.1 for v in values]  # 避免除零错误
+    
+    fig = go.Figure(go.Funnel(
+        y=stages,
+        x=valid_values,
+        orientation="h",
+        textposition="inside",
+        textinfo="value+percent initial",
+        textfont=dict(size=11, color="white", weight="bold"),
+        marker=dict(
+            color=horizontal_colors[:len(values)],
+            line=dict(width=2, color="white")
+        ),
+        opacity=0.9
+    ))
+    
+    fig.update_layout(
+        title={
+            'text': f"<b>{city_name}水平视图</b>",
+            'x': 0.5,
+            'xanchor': 'center',
+            'font': {'size': 14, 'color': '#2C3E50'}
+        },
+        plot_bgcolor='rgba(248,248,248,0.8)',
+        paper_bgcolor='white',
+        height=400,
+        margin=dict(t=50, b=40, l=80, r=40)
     )
     
     return fig
@@ -184,33 +245,47 @@ def create_simple_reason_chart(reason_data, title):
     )
     return fig
 
-def create_combined_reason_chart(reason_data_dict, title):
-    """创建合并的原因占比汇总图"""
-    all_data = []
-    for reason_type, city_data in reason_data_dict.items():
-        for city, reasons in city_data.items():
-            for reason, count in reasons.items():
-                all_data.append({
-                    '原因类型': reason_type,
-                    '城市': city,
-                    '原因': reason,
-                    '数量': count
-                })
+def create_client_reason_summary():
+    """创建未转化客户原因汇总图"""
+    reasons_data = st.session_state.reasons_data
     
-    df = pd.DataFrame(all_data)
+    # 只汇总客户相关的原因（未转化客户原因 + 未成交原因）
+    client_related_data = []
     
-    # 按原因类型和原因汇总
-    summary_df = df.groupby(['原因类型', '原因'])['数量'].sum().reset_index()
+    # 未转化客户原因
+    for city, reasons in reasons_data['not_client'].items():
+        for reason, count in reasons.items():
+            client_related_data.append({
+                '原因类型': '未转化客户原因',
+                '具体原因': reason,
+                '城市': city,
+                '数量': count
+            })
     
+    # 未成交原因
+    for city, reasons in reasons_data['not_deal'].items():
+        for reason, count in reasons.items():
+            client_related_data.append({
+                '原因类型': '未成交原因',
+                '具体原因': reason,
+                '城市': city,
+                '数量': count
+            })
+    
+    df = pd.DataFrame(client_related_data)
+    
+    # 创建旭日图
     fig = px.sunburst(
-        summary_df,
-        path=['原因类型', '原因'],
+        df,
+        path=['原因类型', '具体原因', '城市'],
         values='数量',
-        title=title,
-        color_discrete_sequence=px.colors.qualitative.Set3
+        title='未转化客户原因汇总分析',
+        color_discrete_sequence=px.colors.qualitative.Set3,
+        height=500
     )
     
-    fig.update_layout(height=600)
+    fig.update_traces(textinfo='label+percent parent')
+    
     return fig
 
 # ==================== 主图表生成函数 ====================
@@ -296,7 +371,7 @@ def generate_charts():
     tab1, tab2 = st.tabs(["🎯 垂直漏斗图", "📊 水平视图"])
     
     with tab1:
-        st.subheader("垂直漏斗图 - 各城市独立色彩")
+        st.subheader("垂直漏斗图")
         col1, col2, col3 = st.columns(3)
         with col1:
             fig_funnel1 = create_beautiful_funnel(cities_data['从化'], '从化', stages)
@@ -307,15 +382,29 @@ def generate_charts():
         with col3:
             fig_funnel3 = create_beautiful_funnel(cities_data['江门'], '江门', stages)
             st.plotly_chart(fig_funnel3, use_container_width=True)
+    
+    with tab2:
+        st.subheader("水平漏斗图")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            fig_h1 = create_horizontal_funnel(cities_data['从化'], '从化', stages)
+            st.plotly_chart(fig_h1, use_container_width=True)
+        with col2:
+            fig_h2 = create_horizontal_funnel(cities_data['中山'], '中山', stages)
+            st.plotly_chart(fig_h2, use_container_width=True)
+        with col3:
+            fig_h3 = create_horizontal_funnel(cities_data['江门'], '江门', stages)
+            st.plotly_chart(fig_h3, use_container_width=True)
 
     # ==================== 未转化客户深度分析 ====================
     st.header("🔍 未转化客户深度分析")
     
-    reason_tab1, reason_tab2, reason_tab3, reason_tab4 = st.tabs([
+    reason_tab1, reason_tab2, reason_tab3, reason_tab4, reason_tab5 = st.tabs([
         "❌ 无效线索原因", 
         "📞 未转化线索原因", 
         "👥 未转化客户原因", 
-        "🚫 未到访原因"
+        "🚫 未到访原因",
+        "💸 未成交原因"
     ])
     
     with reason_tab1:
@@ -337,6 +426,11 @@ def generate_charts():
         st.subheader("未到访原因分析（客户但未到访）")
         fig_not_visit_bar = create_simple_reason_chart(reasons_data['not_visit'], "未到访原因")
         st.plotly_chart(fig_not_visit_bar, use_container_width=True)
+    
+    with reason_tab5:
+        st.subheader("未成交原因分析（到访但未成交）")
+        fig_not_deal_bar = create_simple_reason_chart(reasons_data['not_deal'], "未成交原因")
+        st.plotly_chart(fig_not_deal_bar, use_container_width=True)
 
     # ==================== 底部汇总图表 ====================
     col1, col2 = st.columns(2)
@@ -355,9 +449,9 @@ def generate_charts():
         st.plotly_chart(fig_pie, use_container_width=True)
     
     with col2:
-        st.header("📊 未转化原因汇总")
-        fig_combined = create_combined_reason_chart(reasons_data, "所有未转化原因汇总")
-        st.plotly_chart(fig_combined, use_container_width=True)
+        st.header("📊 未转化客户原因汇总")
+        fig_client_summary = create_client_reason_summary()
+        st.plotly_chart(fig_client_summary, use_container_width=True)
 
 # 显示图表
 generate_charts()
@@ -372,4 +466,4 @@ st.sidebar.info("""
 4. 所有图表都是交互式的
 """)
 
-st.sidebar.success("✅ 数据组织更清晰，交互更方便！")
+st.sidebar.success("✅ 系统优化完成！")
