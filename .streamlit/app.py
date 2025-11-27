@@ -244,7 +244,7 @@ def create_simple_reason_chart(reason_data, title):
         title_x=0.5
     )
     return fig
-    
+
 # ==================== 主图表生成函数 ====================
 def generate_charts():
     cities_data = st.session_state.cities_data
@@ -274,10 +274,10 @@ def generate_charts():
             '线索总量': total_leads,
             '线索有效率': f"{valid_rate:.1f}%",
             '线索成本': f"¥{cost_per_lead}",
-            '有效线索成本': f"¥{valid_lead_cost:.0f}" if valid_lead_cost > 0 else "无限大",
-            '客户成本': f"¥{client_cost:.0f}" if client_cost > 0 else "无限大",
-            '到访成本': f"¥{visit_cost:.0f}" if visit_cost > 0 else "无限大",
-            '成交成本': f"¥{deal_cost:.0f}" if deal_cost > 0 else "无限大"
+            '有效线索成本': f"¥{valid_lead_cost:.0f}" if valid_lead_cost > 0 else "/",
+            '客户成本': f"¥{client_cost:.0f}" if client_cost > 0 else "/",
+            '到访成本': f"¥{visit_cost:.0f}" if visit_cost > 0 else "/",
+            '成交成本': f"¥{deal_cost:.0f}" if deal_cost > 0 else "/"
         })
     
     summary_df = pd.DataFrame(summary_data)
@@ -390,17 +390,17 @@ def generate_charts():
         st.plotly_chart(fig_not_deal_bar, use_container_width=True)
 
     # ==================== 底部汇总图表 ====================
-st.header("🔢 线索量分布")
-leads_data = [cities_data[city][0] for city in cities]
-
-fig_pie = px.pie(
-    values=leads_data,
-    names=cities,
-    title='各城市线索量占比',
-    color_discrete_sequence=['#FF6B6B', '#4ECDC4', '#45B7D1']
-)
-fig_pie.update_traces(textposition='inside', textinfo='percent+label+value')
-st.plotly_chart(fig_pie, use_container_width=True)
+    st.header("🔢 线索量分布")
+    leads_data = [cities_data[city][0] for city in cities]
+    
+    fig_pie = px.pie(
+        values=leads_data,
+        names=cities,
+        title='各城市线索量占比',
+        color_discrete_sequence=['#FF6B6B', '#4ECDC4', '#45B7D1']
+    )
+    fig_pie.update_traces(textposition='inside', textinfo='percent+label+value')
+    st.plotly_chart(fig_pie, use_container_width=True)
 
 # 显示图表
 generate_charts()
