@@ -245,43 +245,94 @@ def create_simple_reason_chart(reason_data, title):
     )
     return fig
 
+def create_pie_chart_for_reason(reason_data, title):
+    """为原因数据创建饼图分析"""
+    fig = make_subplots(
+        rows=1, 
+        cols=3, 
+        subplot_titles=[f'{city}{title}占比' for city in cities],
+        specs=[[{"type": "pie"}, {"type": "pie"}, {"type": "pie"}]]
+    )
+    
+    for i, city in enumerate(cities):
+        city_data = reason_data[city]
+        reasons = list(city_data.keys())
+        counts = list(city_data.values())
+        
+        fig.add_trace(
+            go.Pie(
+                labels=reasons,
+                values=counts,
+                name=city,
+                textinfo='percent+label',
+                showlegend=False,
+                hole=0.4
+            ),
+            row=1, col=i+1
+        )
+    
+    fig.update_layout(
+        height=400,
+        showlegend=False,
+        title_text=f"<b>{title}占比分析</b>",
+        title_x=0.5
+    )
+    return fig
+
 # ==================== 主图表生成函数 ====================
 def generate_charts():
     cities_data = st.session_state.cities_data
     reasons_data = st.session_state.reasons_data
 
-    # ==================== 汇总看板表格 ====================
-    st.header("📈 数据汇总看板")
+    # ==================== 汇总看板表格 + 线索量分布 ====================
+    col1, col2 = st.columns([2, 1])
     
-    summary_data = []
-    for city in cities:
-        values = cities_data[city]
-        total_leads = values[0]
-        valid_leads = values[2]
-        clients = values[3]
-        visits = values[4]
-        deals = values[5]
+    with col1:
+        st.header("📈 数据汇总看板")
         
-        total_cost = total_leads * cost_per_lead
-        valid_rate = (valid_leads / total_leads * 100) if total_leads > 0 else 0
-        valid_lead_cost = total_cost / valid_leads if valid_leads > 0 else 0
-        client_cost = total_cost / clients if clients > 0 else 0
-        visit_cost = total_cost / visits if visits > 0 else 0
-        deal_cost = total_cost / deals if deals > 0 else 0
+        summary_data = []
+        for city in cities:
+            values = cities_data[city]
+            total_leads = values[0]
+            valid_leads = values[2]
+            clients = values[3]
+            visits = values[4]
+            deals = values[5]
+            
+            total_cost = total_leads * cost_per_lead
+            valid_rate = (valid_leads / total_leads * 100) if total_leads > 0 else 0
+            valid_lead_cost = total_cost / valid_leads if valid_leads > 0 else 0
+            client_cost = total_cost / clients if clients > 0 else 0
+            visit_cost = total_cost / visits if visits > 0 else 0
+            deal_cost = total_cost / deals if deals > 0 else 0
+            
+            summary_data.append({
+                '城市': city,
+                '线索总量': total_leads,
+                '线索有效率': f"{valid_rate:.1f}%",
+                '线索成本': f"¥{cost_per_lead}",
+                '有效线索成本': f"¥{valid_lead_cost:.0f}" if valid_lead_cost > 0 else "/",
+                '客户成本': f"¥{client_cost:.0f}" if client_cost > 0 else "/",
+                '到访成本': f"¥{visit_cost:.0f}" if visit_cost > 0 else "/",
+                '成交成本': f"¥{deal_cost:.0f}" if deal_cost > 0 else "/"
+            })
         
-        summary_data.append({
-            '城市': city,
-            '线索总量': total_leads,
-            '线索有效率': f"{valid_rate:.1f}%",
-            '线索成本': f"¥{cost_per_lead}",
-            '有效线索成本': f"¥{valid_lead_cost:.0f}" if valid_lead_cost > 0 else "/",
-            '客户成本': f"¥{client_cost:.0f}" if client_cost > 0 else "/",
-            '到访成本': f"¥{visit_cost:.0f}" if visit_cost > 0 else "/",
-            '成交成本': f"¥{deal_cost:.0f}" if deal_cost > 0 else "/"
-        })
+        summary_df = pd.DataFrame(summary_data)
+        st.dataframe(summary_df, use_container_width=True)
     
-    summary_df = pd.DataFrame(summary_data)
-    st.dataframe(summary_df, use_container_width=True)
+    with col2:
+        st.header("🔢 线索量分布")
+        leads_data = [cities_data[city][0] for city in cities]
+        
+        fig_pie = px.pie(
+            values=leads_data,
+            names=cities,
+            title='',
+            color_discrete_sequence=['#FF6B6B', '#4ECDC4', '#45B7D1']
+        )
+        fig_pie.update_traces(textposition='inside', textinfo='percent+label')
+        fig_pie.update_layout(height=300, showlegend=False)
+        st.plotly_chart(fig_pie, use_container_width=True)
 
     # ==================== 成本分析 ====================
     st.header("💰 各阶段成本分析")
@@ -353,8 +404,8 @@ def generate_charts():
             fig_h3 = create_horizontal_funnel(cities_data['江门'], '江门', stages)
             st.plotly_chart(fig_h3, use_container_width=True)
 
-    # ==================== 未转化客户深度分析 ====================
-    st.header("🔍 未转化客户深度分析")
+    # ==================== 未转化客户深度分析 - 柱状图 ====================
+    st.header("🔍 未转化客户深度分析 - 柱状图")
     
     reason_tab1, reason_tab2, reason_tab3, reason_tab4, reason_tab5 = st.tabs([
         "❌ 无效线索原因", 
@@ -389,18 +440,41 @@ def generate_charts():
         fig_not_deal_bar = create_simple_reason_chart(reasons_data['not_deal'], "未成交原因")
         st.plotly_chart(fig_not_deal_bar, use_container_width=True)
 
-    # ==================== 底部汇总图表 ====================
-    st.header("🔢 线索量分布")
-    leads_data = [cities_data[city][0] for city in cities]
+    # ==================== 未转化客户深度分析 - 饼图 ====================
+    st.header("🥧 未转化客户深度分析 - 饼图")
     
-    fig_pie = px.pie(
-        values=leads_data,
-        names=cities,
-        title='各城市线索量占比',
-        color_discrete_sequence=['#FF6B6B', '#4ECDC4', '#45B7D1']
-    )
-    fig_pie.update_traces(textposition='inside', textinfo='percent+label+value')
-    st.plotly_chart(fig_pie, use_container_width=True)
+    pie_tab1, pie_tab2, pie_tab3, pie_tab4, pie_tab5 = st.tabs([
+        "❌ 无效线索占比", 
+        "📞 未转化线索占比", 
+        "👥 未转化客户占比", 
+        "🚫 未到访占比",
+        "💸 未成交占比"
+    ])
+    
+    with pie_tab1:
+        st.subheader("无效线索原因占比分析")
+        fig_invalid_pie = create_pie_chart_for_reason(reasons_data['invalid'], "无效线索原因")
+        st.plotly_chart(fig_invalid_pie, use_container_width=True)
+    
+    with pie_tab2:
+        st.subheader("未转化线索原因占比分析")
+        fig_not_conv_pie = create_pie_chart_for_reason(reasons_data['not_converted'], "未转化线索原因")
+        st.plotly_chart(fig_not_conv_pie, use_container_width=True)
+    
+    with pie_tab3:
+        st.subheader("未转化客户原因占比分析")
+        fig_not_client_pie = create_pie_chart_for_reason(reasons_data['not_client'], "未转化客户原因")
+        st.plotly_chart(fig_not_client_pie, use_container_width=True)
+    
+    with pie_tab4:
+        st.subheader("未到访原因占比分析")
+        fig_not_visit_pie = create_pie_chart_for_reason(reasons_data['not_visit'], "未到访原因")
+        st.plotly_chart(fig_not_visit_pie, use_container_width=True)
+    
+    with pie_tab5:
+        st.subheader("未成交原因占比分析")
+        fig_not_deal_pie = create_pie_chart_for_reason(reasons_data['not_deal'], "未成交原因")
+        st.plotly_chart(fig_not_deal_pie, use_container_width=True)
 
 # 显示图表
 generate_charts()
