@@ -1,186 +1,198 @@
 import streamlit as st
-import matplotlib.pyplot as plt
-import matplotlib.font_manager as fm
-import numpy as np
 import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import numpy as np
 
-# ======================
-#       字体设置
-# ======================
-font_path = "fonts/SimHei.ttf"   # 上传到 GitHub 的字体
-fm.fontManager.addfont(font_path)
-plt.rcParams["font.sans-serif"] = ["SimHei"]
-plt.rcParams["axes.unicode_minus"] = False
-
-# ======================
-#   页面基础设置
-# ======================
+# 网页标题
 st.set_page_config(page_title="销售数据分析系统", layout="wide")
 st.title("🎯 三城市销售数据分析系统")
 
-# ======================
-#       输入区
-# ======================
+# 侧边栏 - 数据输入
 st.sidebar.header("📊 数据输入")
 cost_per_lead = st.sidebar.number_input("单条线索成本(元)", value=320, min_value=0)
 
-cities = ["从化", "中山", "江门"]
+# 城市数据输入
+st.sidebar.subheader("各城市转化数据")
+
+cities_data = {}
+cities = ['从化', '中山', '江门']
 stages = ['线索量', '接通数', '有效数', '客户数', '到访数', '成交数']
 
 default_values = {
     '从化': [21, 19, 17, 8, 4, 0],
-    '中山': [30, 25, 20, 11, 0, 0],
+    '中山': [30, 25, 20, 11, 0, 0], 
     '江门': [6, 6, 5, 5, 1, 0]
 }
 
-cities_data = {}
-
-# 城市输入表单
 for city in cities:
-    st.sidebar.subheader(f"{city} 转化数据")
-    values = [
-        st.sidebar.number_input(f"{city}-{stage}", value=default_values[city][i], key=f"{city}_{stage}")
-        for i, stage in enumerate(stages)
-    ]
-    cities_data[city] = {"stages": stages, "values": values}
-
-# ======================
-#   未转化原因
-# ======================
-st.sidebar.header("❓ 未转化原因")
-
-reason_types = {
-    '从化': ['地域不符', '原因未知', '行业不符', '价格太高'],
-    '中山': ['地域不符', '原因未知', '行业不符', '预算不足'],
-    '江门': ['跟进中', '地域不符', '原因未知']
-}
-
-default_reason_values = {
-    '从化': [6, 3, 3, 3],
-    '中山': [3, 2, 2, 2],
-    '江门': [1, 1, 2]
-}
-
-reasons_data = {}
-
-for city in cities:
-    st.sidebar.subheader(f"{city} 未转化原因")
-    reasons_data[city] = {
-        reason: st.sidebar.number_input(
-            f"{city}-{reason}",
-            value=default_reason_values[city][i],
-            min_value=0,
-            key=f"reason_{city}_{reason}"
+    st.sidebar.write(f"**{city}转化数据**")
+    values = []
+    for i, stage in enumerate(stages):
+        value = st.sidebar.number_input(
+            f"{city}-{stage}", 
+            value=default_values[city][i],
+            key=f"{city}_{stage}"
         )
-        for i, reason in enumerate(reason_types[city])
-    }
+        values.append(value)
+    cities_data[city] = values
 
-# ======================
-#      工具函数
-# ======================
+# 未转化原因数据
+st.sidebar.subheader("未转化原因数据")
+reasons_data = {
+    '从化': {'地域不符': 6, '原因未知': 3, '行业不符': 3, '价格太高': 3},
+    '中山': {'地域不符': 3, '原因未知': 2, '行业不符': 2, '预算不足': 2},
+    '江门': {'跟进中': 1, '地域不符': 1, '原因未知': 2}
+}
 
-def calc_summary_table():
-    table = []
+def generate_charts():
+    # ==================== 汇总看板表格 ====================
+    st.header("📈 数据汇总看板")
+    
+    summary_data = []
     for city in cities:
-        vals = cities_data[city]["values"]
-        total_cost = vals[0] * cost_per_lead
+        values = cities_data[city]
+        total_leads = values[0]
+        valid_leads = values[2]
+        clients = values[3]
+        visits = values[4]
+        deals = values[5]
+        
+        total_cost = total_leads * cost_per_lead
+        valid_rate = (valid_leads / total_leads * 100) if total_leads > 0 else 0
+        valid_lead_cost = total_cost / valid_leads if valid_leads > 0 else 0
+        client_cost = total_cost / clients if clients > 0 else 0
+        visit_cost = total_cost / visits if visits > 0 else 0
+        deal_cost = total_cost / deals if deals > 0 else 0
+        
+        summary_data.append({
+            '城市': city,
+            '线索总量': total_leads,
+            '线索有效率': f"{valid_rate:.1f}%",
+            '线索成本': f"¥{cost_per_lead}",
+            '有效线索成本': f"¥{valid_lead_cost:.0f}" if valid_lead_cost > 0 else "无限大",
+            '客户成本': f"¥{client_cost:.0f}" if client_cost > 0 else "无限大",
+            '到访成本': f"¥{visit_cost:.0f}" if visit_cost > 0 else "无限大",
+            '成交成本': f"¥{deal_cost:.0f}" if deal_cost > 0 else "无限大"
+        })
+    
+    summary_df = pd.DataFrame(summary_data)
+    st.dataframe(summary_df, use_container_width=True)
 
-        summary = {
-            "城市": city,
-            "线索总量": vals[0],
-            "线索有效率": f"{(vals[2] / vals[0] * 100):.1f}%" if vals[0] else "0%",
-            "线索成本": cost_per_lead,
-            "线索有效成本": total_cost / vals[2] if vals[2] else None,
-            "客户成本": total_cost / vals[3] if vals[3] else None,
-            "到访成本": total_cost / vals[4] if vals[4] else None,
-            "成交成本": total_cost / vals[5] if vals[5] else None,
-        }
-
-        # 转换 None → "\"
-        for k, v in summary.items():
-            if isinstance(v, float) and np.isinf(v):
-                summary[k] = "\\"
-
-        table.append(summary)
-
-    return pd.DataFrame(table)
-
-
-def draw_cost_chart():
-    fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+    # ==================== 成本分析 - Plotly柱状图 ====================
+    st.header("💰 各阶段成本分析")
+    
+    fig_cost = make_subplots(rows=1, cols=3, subplot_titles=[f'{city}成本分析' for city in cities])
+    
+    cost_labels = ['线索', '接通', '有效', '客户', '到访', '成交']
     colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD']
-    cost_labels = {
-        '线索量': '线索成本', '接通数': '接通成本', '有效数': '有效成本',
-        '客户数': '客户成本', '到访数': '到访成本', '成交数': '成交成本'
-    }
-
+    
     for i, city in enumerate(cities):
-        vals = cities_data[city]["values"]
-        total_cost = vals[0] * cost_per_lead
+        values = cities_data[city]
+        total_cost = values[0] * cost_per_lead
+        
+        stage_costs = []
+        for j in range(len(values)):
+            if values[j] > 0:
+                cost = total_cost / values[j]
+                stage_costs.append(cost)
+            else:
+                stage_costs.append(0)
+        
+        fig_cost.add_trace(
+            go.Bar(
+                name=city,
+                x=cost_labels,
+                y=stage_costs,
+                marker_color=colors,
+                text=[f'¥{cost:.0f}' for cost in stage_costs],
+                textposition='auto',
+                showlegend=False
+            ),
+            row=1, col=i+1
+        )
+        
+        fig_cost.update_xaxes(title_text="阶段", row=1, col=i+1)
+        fig_cost.update_yaxes(title_text="成本(元)", row=1, col=i+1)
+    
+    fig_cost.update_layout(height=500, showlegend=False)
+    st.plotly_chart(fig_cost, use_container_width=True)
 
-        stage_costs = [total_cost / v if v else None for v in vals]
-        labels = [f"{cost_labels[stage]}\n({vals[j]}人)" for j, stage in enumerate(stages) if vals[j] > 0]
-
-        filtered_costs = [c for c in stage_costs if c]
-        bars = axes[i].bar(range(len(filtered_costs)), filtered_costs, color=colors)
-
-        axes[i].set_title(f"{city} - 成本分析")
-        axes[i].set_ylabel("单条成本 (元)")
-        axes[i].set_xticks(range(len(labels)))
-        axes[i].set_xticklabels(labels, rotation=45, fontsize=8)
-
-    plt.tight_layout()
-    st.pyplot(fig)
-
-
-def draw_funnel_chart():
-    fig, axes = plt.subplots(1, 3, figsize=(18, 7))
-    colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD']
-
+    # ==================== 转化漏斗 - Plotly漏斗图 ====================
+    st.header("📊 转化漏斗分析")
+    
+    fig_funnel = make_subplots(rows=1, cols=3, subplot_titles=[f'{city}转化漏斗' for city in cities])
+    
     for i, city in enumerate(cities):
-        vals = cities_data[city]["values"]
-        max_val = max(vals)
+        values = cities_data[city]
+        
+        fig_funnel.add_trace(
+            go.Funnel(
+                name=city,
+                y=stages,
+                x=values,
+                textinfo="value+percent initial",
+                marker_color=colors,
+                showlegend=False
+            ),
+            row=1, col=i+1
+        )
+    
+    fig_funnel.update_layout(height=500, showlegend=False)
+    st.plotly_chart(fig_funnel, use_container_width=True)
 
-        left_offset = [(max_val - v) / 2 for v in vals]
-
-        for j, v in enumerate(vals):
-            axes[i].barh(stages[j], v, left=left_offset[j], color=colors[j])
-
-        axes[i].set_title(f"{city}转化漏斗")
-        axes[i].invert_yaxis()
-        axes[i].set_xticks([])
-
-    plt.tight_layout()
-    st.pyplot(fig)
-
-
-def draw_reason_chart():
-    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
-    colors = ['#FF9999', '#99CCFF', '#99FF99', '#FFD700', '#C9A0FF']
-
+    # ==================== 未转化原因分析 - Plotly水平柱状图 ====================
+    st.header("❓ 未转化客户原因分析")
+    
+    fig_reason = make_subplots(rows=1, cols=3, subplot_titles=[f'{city}未转化原因' for city in cities])
+    
+    reason_colors = ['#FF9999', '#99CCFF', '#99FF99', '#FFD700']
+    
     for i, city in enumerate(cities):
-        reasons = list(reasons_data[city].keys())
-        counts = list(reasons_data[city].values())
+        reason_data = reasons_data[city]
+        reasons = list(reason_data.keys())
+        counts = list(reason_data.values())
+        
+        fig_reason.add_trace(
+            go.Bar(
+                name=city,
+                y=reasons,
+                x=counts,
+                orientation='h',
+                marker_color=reason_colors[:len(reasons)],
+                text=counts,
+                textposition='auto',
+                showlegend=False
+            ),
+            row=1, col=i+1
+        )
+        
+        fig_reason.update_xaxes(title_text="数量", row=1, col=i+1)
+    
+    fig_reason.update_layout(height=400, showlegend=False)
+    st.plotly_chart(fig_reason, use_container_width=True)
 
-        axes[i].barh(reasons, counts, color=colors[:len(reasons)])
-        axes[i].set_title(city)
-        axes[i].invert_yaxis()
+    # ==================== 线索量对比 - Plotly饼图 ====================
+    st.header("🔢 线索量分布")
+    
+    leads_data = [cities_data[city][0] for city in cities]
+    
+    fig_pie = px.pie(
+        values=leads_data,
+        names=cities,
+        title='各城市线索量占比',
+        color_discrete_sequence=px.colors.qualitative.Set3
+    )
+    fig_pie.update_traces(textposition='inside', textinfo='percent+label+value')
+    st.plotly_chart(fig_pie, use_container_width=True)
 
-    plt.tight_layout()
-    st.pyplot(fig)
+# 显示图表
+generate_charts()
 
-# ======================
-#      数据展示区
-# ======================
-st.header("📈 数据汇总看板")
-st.dataframe(calc_summary_table(), use_container_width=True)
+# 刷新按钮
+if st.sidebar.button("🔄 刷新图表"):
+    generate_charts()
 
-st.header("💰 成本分析")
-draw_cost_chart()
-
-st.header("📊 转化漏斗分析")
-draw_funnel_chart()
-
-st.header("❓ 未转化客户原因分析")
-draw_reason_chart()
-
+st.sidebar.markdown("---")
+st.sidebar.success("✅ 使用Plotly图表，中文完美支持！")
