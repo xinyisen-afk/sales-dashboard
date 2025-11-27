@@ -3,21 +3,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-# 更兼容的字体设置方案
+# 简化字体设置，避免冲突
 try:
-    # 尝试多种字体，按优先级排列
-    plt.rcParams['font.sans-serif'] = [
-        'DejaVu Sans',      # Linux 系统字体
-        'Arial Unicode MS', # Mac 系统字体  
-        'Microsoft YaHei',  # Windows 中文
-        'SimHei',           # Windows 中文
-        'WenQuanYi Micro Hei', # Linux 中文
-        'sans-serif'        # 最后回退到无衬线字体
-    ]
+    plt.rcParams['font.sans-serif'] = ['DejaVu Sans', 'Liberation Sans', 'Arial']
     plt.rcParams['axes.unicode_minus'] = False
-    st.success("字体设置成功")
-except Exception as e:
-    st.warning(f"字体设置警告: {e}，使用系统默认字体")
+except:
+    pass
 
 # 网页标题
 st.set_page_config(page_title="销售数据分析系统", layout="wide")
@@ -59,7 +50,6 @@ for city in cities:
 # 未转化原因数据输入
 st.sidebar.subheader("各城市未转化原因")
 
-# 定义各城市的未转化原因类型
 reasons_categories = {
     '从化': ['地域不符', '原因未知', '行业不符', '价格太高'],
     '中山': ['地域不符', '原因未知', '行业不符', '预算不足'],
@@ -72,7 +62,6 @@ for city in cities:
     st.sidebar.write(f"**{city}未转化原因**")
     city_reasons = {}
     
-    # 为每个城市设置默认值
     default_counts = {
         '从化': [6, 3, 3, 3],
         '中山': [3, 2, 2, 2],
@@ -101,12 +90,6 @@ def generate_charts():
     
     # 计算汇总数据
     summary_data = []
-    total_leads_sum = 0
-    valid_leads_sum = 0
-    clients_sum = 0
-    visits_sum = 0
-    deals_sum = 0
-
     for city in cities:
         values = cities_data[city]['values']
         total_leads = values[0]
@@ -114,12 +97,6 @@ def generate_charts():
         clients = values[3]
         visits = values[4]
         deals = values[5]
-        
-        total_leads_sum += total_leads
-        valid_leads_sum += valid_leads
-        clients_sum += clients
-        visits_sum += visits
-        deals_sum += deals
         
         total_cost = total_leads * cost_per_lead
         lead_cost = cost_per_lead
@@ -144,135 +121,143 @@ def generate_charts():
 
     # ==================== 成本柱状图 ====================
     st.header("💰 成本分析")
-    fig_cost, axes_cost = plt.subplots(1, 3, figsize=(18, 6))
     
-    cost_labels = {'线索量': '线索成本', '接通数': '接通成本', '有效数': '有效成本', 
-                  '客户数': '客户成本', '到访数': '到访成本', '成交数': '成交成本'}
-    
-    for i, city in enumerate(cities):
-        values = cities_data[city]['values']
-        total_cost = values[0] * cost_per_lead
+    try:
+        fig_cost, axes_cost = plt.subplots(1, 3, figsize=(18, 6))
         
-        stage_costs = []
-        stage_labels = []
-        for j in range(len(values)):
-            if values[j] > 0:
-                cost = total_cost / values[j]
-                stage_costs.append(cost)
-                # 简化标签，避免中文问题
-                stage_labels.append(f'Stage {j+1}\n({values[j]})')
+        cost_labels = ['线索', '接通', '有效', '客户', '到访', '成交']
         
-        bars = axes_cost[i].bar(range(len(stage_costs)), stage_costs, color=colors[:len(stage_costs)], alpha=0.8)
+        for i, city in enumerate(cities):
+            values = cities_data[city]['values']
+            total_cost = values[0] * cost_per_lead
+            
+            stage_costs = []
+            stage_labels = []
+            for j in range(len(values)):
+                if values[j] > 0:
+                    cost = total_cost / values[j]
+                    stage_costs.append(cost)
+                    stage_labels.append(f'{cost_labels[j]}\n{values[j]}')
+            
+            bars = axes_cost[i].bar(range(len(stage_costs)), stage_costs, color=colors[:len(stage_costs)], alpha=0.8)
+            
+            for bar, cost in zip(bars, stage_costs):
+                height = bar.get_height()
+                axes_cost[i].text(bar.get_x() + bar.get_width()/2., height + 20,
+                                f'{cost:.0f}', ha='center', va='bottom', fontsize=9, fontweight='bold')
+            
+            axes_cost[i].set_title(f'{city}', fontsize=12, fontweight='bold')
+            axes_cost[i].set_ylabel('成本 (元)', fontsize=10)
+            axes_cost[i].set_xticks(range(len(stage_labels)))
+            axes_cost[i].set_xticklabels(stage_labels, fontsize=8, rotation=45)
+            
+            if stage_costs:
+                axes_cost[i].set_ylim(0, max(stage_costs) * 1.2)
+            
+            axes_cost[i].spines['top'].set_visible(False)
+            axes_cost[i].spines['right'].set_visible(False)
         
-        for bar, cost in zip(bars, stage_costs):
-            height = bar.get_height()
-            axes_cost[i].text(bar.get_x() + bar.get_width()/2., height + 20,
-                            f'{cost:.0f}', ha='center', va='bottom', fontsize=9, fontweight='bold')
-        
-        axes_cost[i].set_title(f'{city} - 成本分析', fontsize=12, fontweight='bold')
-        axes_cost[i].set_ylabel('成本 (元)', fontsize=10)
-        axes_cost[i].set_xticks(range(len(stage_labels)))
-        axes_cost[i].set_xticklabels(stage_labels, fontsize=8, rotation=45)
-        
-        if stage_costs:
-            axes_cost[i].set_ylim(0, max(stage_costs) * 1.2)
-        
-        axes_cost[i].spines['top'].set_visible(False)
-        axes_cost[i].spines['right'].set_visible(False)
-    
-    st.pyplot(fig_cost)
+        st.pyplot(fig_cost)
+        plt.close(fig_cost)  # 重要：关闭图表释放内存
+    except Exception as e:
+        st.error(f"成本图表生成失败: {e}")
 
     # ==================== 漏斗图 ====================
     st.header("📊 转化漏斗分析")
-    fig_funnel, axes_funnel = plt.subplots(1, 3, figsize=(18, 8))
     
-    for i, city in enumerate(cities):
-        values = cities_data[city]['values']
-        stages_list = cities_data[city]['stages']
+    try:
+        fig_funnel, axes_funnel = plt.subplots(1, 3, figsize=(18, 8))
         
-        max_value = max(values)
-        centered_values = [(max_value - value) / 2 for value in values]
-        
-        conversion_rates = []
-        for j in range(len(values)):
-            if j == 0:
-                conversion_rates.append(100.0)
-            else:
-                rate = (values[j] / values[j-1]) * 100 if values[j-1] > 0 else 0
-                conversion_rates.append(rate)
-        
-        for j, (stage, value, centered_val) in enumerate(zip(stages_list, values, centered_values)):
-            axes_funnel[i].barh(stage, value, left=centered_val, color=colors[j], alpha=0.8, height=0.6)
-        
-        axes_funnel[i].set_xlim(0, max_value + 2)
-        axes_funnel[i].invert_yaxis()
-        axes_funnel[i].set_xticks([])
-        
-        for j, (stage, value, rate, centered_val) in enumerate(zip(stages_list, values, conversion_rates, centered_values)):
-            number_x = centered_val + value / 2
-            percent_x = centered_val + value + 0.2
+        for i, city in enumerate(cities):
+            values = cities_data[city]['values']
+            stages_list = ['线索', '接通', '有效', '客户', '到访', '成交']
             
-            axes_funnel[i].text(number_x, j, f'{value}', 
-                              va='center', ha='center', fontsize=10, fontweight='bold',
-                              color='white')
+            max_value = max(values)
+            centered_values = [(max_value - value) / 2 for value in values]
             
-            if j > 0:
-                axes_funnel[i].text(percent_x, j, f'({rate:.1f}%)', 
-                                  va='center', ha='left', fontsize=9, fontweight='bold',
-                                  color='black')
-            elif j == 0:
-                axes_funnel[i].text(percent_x, j, '(基准)', 
-                                  va='center', ha='left', fontsize=9, fontweight='bold',
-                                  color='black')
+            conversion_rates = []
+            for j in range(len(values)):
+                if j == 0:
+                    conversion_rates.append(100.0)
+                else:
+                    rate = (values[j] / values[j-1]) * 100 if values[j-1] > 0 else 0
+                    conversion_rates.append(rate)
+            
+            for j, (stage, value, centered_val) in enumerate(zip(stages_list, values, centered_values)):
+                axes_funnel[i].barh(stage, value, left=centered_val, color=colors[j], alpha=0.8, height=0.6)
+            
+            axes_funnel[i].set_xlim(0, max_value + 2)
+            axes_funnel[i].invert_yaxis()
+            axes_funnel[i].set_xticks([])
+            
+            for j, (stage, value, rate, centered_val) in enumerate(zip(stages_list, values, conversion_rates, centered_values)):
+                number_x = centered_val + value / 2
+                percent_x = centered_val + value + 0.2
+                
+                axes_funnel[i].text(number_x, j, f'{value}', 
+                                  va='center', ha='center', fontsize=10, fontweight='bold',
+                                  color='white')
+                
+                if j > 0:
+                    axes_funnel[i].text(percent_x, j, f'({rate:.1f}%)', 
+                                      va='center', ha='left', fontsize=9, fontweight='bold',
+                                      color='black')
+                elif j == 0:
+                    axes_funnel[i].text(percent_x, j, '(基准)', 
+                                      va='center', ha='left', fontsize=9, fontweight='bold',
+                                      color='black')
+            
+            axes_funnel[i].set_title(f'{city}', fontsize=12, fontweight='bold')
+            
+            for spine in axes_funnel[i].spines.values():
+                spine.set_visible(False)
         
-        axes_funnel[i].set_title(f'{city}转化漏斗', fontsize=12, fontweight='bold')
-        
-        for spine in axes_funnel[i].spines.values():
-            spine.set_visible(False)
-    
-    st.pyplot(fig_funnel)
+        st.pyplot(fig_funnel)
+        plt.close(fig_funnel)  # 重要：关闭图表释放内存
+    except Exception as e:
+        st.error(f"漏斗图生成失败: {e}")
 
     # ==================== 未转化客户原因分析 ====================
     st.header("❓ 未转化客户原因分析")
     
-    # 创建3个子图横向排列
-    fig_reason, axes_reason = plt.subplots(1, 3, figsize=(16, 5))
-    
-    for i, city in enumerate(cities):
-        reason_data = reasons_data[city]
-        reasons = list(reason_data.keys())
-        counts = list(reason_data.values())
+    try:
+        fig_reason, axes_reason = plt.subplots(1, 3, figsize=(16, 5))
         
-        # 绘制水平柱状图
-        bars = axes_reason[i].barh(reasons, counts, color=reason_colors[:len(reasons)], alpha=0.8, height=0.5)
+        for i, city in enumerate(cities):
+            reason_data = reasons_data[city]
+            reasons = list(reason_data.keys())
+            counts = list(reason_data.values())
+            
+            bars = axes_reason[i].barh(reasons, counts, color=reason_colors[:len(reasons)], alpha=0.8, height=0.5)
+            
+            for bar, count in zip(bars, counts):
+                width = bar.get_width()
+                axes_reason[i].text(width + 0.05, bar.get_y() + bar.get_height()/2, 
+                                  f'{count}个', ha='left', va='center', fontsize=10, fontweight='bold')
+            
+            axes_reason[i].set_title(f'{city}', fontsize=12, fontweight='bold')
+            axes_reason[i].set_xlabel('数量', fontsize=10)
+            axes_reason[i].set_xlim(0, max(counts) + 1)
+            
+            axes_reason[i].set_xticks([])
+            axes_reason[i].tick_params(left=False, labelsize=9)
+            axes_reason[i].spines['top'].set_visible(False)
+            axes_reason[i].spines['right'].set_visible(False)
+            axes_reason[i].spines['bottom'].set_visible(False)
         
-        # 添加数值标签
-        for bar, count in zip(bars, counts):
-            width = bar.get_width()
-            axes_reason[i].text(width + 0.05, bar.get_y() + bar.get_height()/2, 
-                              f'{count}个', ha='left', va='center', fontsize=10, fontweight='bold')
-        
-        axes_reason[i].set_title(f'{city}', fontsize=12, fontweight='bold')
-        axes_reason[i].set_xlabel('数量', fontsize=10)
-        axes_reason[i].set_xlim(0, max(counts) + 1)
-        
-        # 美化图表
-        axes_reason[i].set_xticks([])
-        axes_reason[i].tick_params(left=False, labelsize=9)
-        axes_reason[i].spines['top'].set_visible(False)
-        axes_reason[i].spines['right'].set_visible(False)
-        axes_reason[i].spines['bottom'].set_visible(False)
-    
-    # 调整布局并显示
-    plt.tight_layout(pad=2.0)
-    st.pyplot(fig_reason)
+        plt.tight_layout(pad=2.0)
+        st.pyplot(fig_reason)
+        plt.close(fig_reason)  # 重要：关闭图表释放内存
+    except Exception as e:
+        st.error(f"原因分析图生成失败: {e}")
 
 # 默认显示图表
 generate_charts()
 
 # 刷新按钮
-st.sidebar.button("🔄 刷新图表", on_click=generate_charts)
+if st.sidebar.button("🔄 刷新图表"):
+    generate_charts()
 
-# 显示字体状态
+# 调试信息
 st.sidebar.markdown("---")
-st.sidebar.info("如果看到乱码，这是服务器字体限制，不影响功能使用")
+st.sidebar.info("图表状态：正常显示")
