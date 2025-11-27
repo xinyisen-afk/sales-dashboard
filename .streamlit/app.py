@@ -244,50 +244,7 @@ def create_simple_reason_chart(reason_data, title):
         title_x=0.5
     )
     return fig
-
-def create_client_reason_summary():
-    """创建未转化客户原因汇总图"""
-    reasons_data = st.session_state.reasons_data
     
-    # 只汇总客户相关的原因（未转化客户原因 + 未成交原因）
-    client_related_data = []
-    
-    # 未转化客户原因
-    for city, reasons in reasons_data['not_client'].items():
-        for reason, count in reasons.items():
-            client_related_data.append({
-                '原因类型': '未转化客户原因',
-                '具体原因': reason,
-                '城市': city,
-                '数量': count
-            })
-    
-    # 未成交原因
-    for city, reasons in reasons_data['not_deal'].items():
-        for reason, count in reasons.items():
-            client_related_data.append({
-                '原因类型': '未成交原因',
-                '具体原因': reason,
-                '城市': city,
-                '数量': count
-            })
-    
-    df = pd.DataFrame(client_related_data)
-    
-    # 创建旭日图
-    fig = px.sunburst(
-        df,
-        path=['原因类型', '具体原因', '城市'],
-        values='数量',
-        title='未转化客户原因汇总分析',
-        color_discrete_sequence=px.colors.qualitative.Set3,
-        height=500
-    )
-    
-    fig.update_traces(textinfo='label+percent parent')
-    
-    return fig
-
 # ==================== 主图表生成函数 ====================
 def generate_charts():
     cities_data = st.session_state.cities_data
@@ -433,25 +390,17 @@ def generate_charts():
         st.plotly_chart(fig_not_deal_bar, use_container_width=True)
 
     # ==================== 底部汇总图表 ====================
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.header("🔢 线索量分布")
-        leads_data = [cities_data[city][0] for city in cities]
-        
-        fig_pie = px.pie(
-            values=leads_data,
-            names=cities,
-            title='各城市线索量占比',
-            color_discrete_sequence=['#FF6B6B', '#4ECDC4', '#45B7D1']
-        )
-        fig_pie.update_traces(textposition='inside', textinfo='percent+label+value')
-        st.plotly_chart(fig_pie, use_container_width=True)
-    
-    with col2:
-        st.header("📊 未转化客户原因汇总")
-        fig_client_summary = create_client_reason_summary()
-        st.plotly_chart(fig_client_summary, use_container_width=True)
+st.header("🔢 线索量分布")
+leads_data = [cities_data[city][0] for city in cities]
+
+fig_pie = px.pie(
+    values=leads_data,
+    names=cities,
+    title='各城市线索量占比',
+    color_discrete_sequence=['#FF6B6B', '#4ECDC4', '#45B7D1']
+)
+fig_pie.update_traces(textposition='inside', textinfo='percent+label+value')
+st.plotly_chart(fig_pie, use_container_width=True)
 
 # 显示图表
 generate_charts()
