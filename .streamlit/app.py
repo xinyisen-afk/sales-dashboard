@@ -2,15 +2,10 @@ import streamlit as st
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from matplotlib import font_manager
 
-# 设置中文字体（强制使用指定字体）
-font_path = "/usr/share/fonts/truetype/msttcorefonts/Arial.ttf"  # 或者你自己的字体路径
-prop = font_manager.FontProperties(fname=font_path)
-plt.rcParams['font.family'] = prop.get_name()
-
-# 为了避免负号显示为乱码
-plt.rcParams['axes.unicode_minus'] = False
+# 设置中文字体
+plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'Arial', 'DejaVu Sans']  # 更换字体
+plt.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
 
 # 网页标题
 st.set_page_config(page_title="销售数据分析系统", layout="wide")
