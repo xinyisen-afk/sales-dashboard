@@ -1,9 +1,7 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import numpy as np
 
 # 网页标题
 st.set_page_config(page_title="销售数据分析系统", layout="wide")
@@ -46,104 +44,54 @@ reasons_data = {
     '江门': {'跟进中': 1, '地域不符': 1, '原因未知': 2}
 }
 
-def create_beautiful_funnel(city_data, city_name, stages):
-    """创建美观的漏斗图"""
-    values = city_data
-    total_leads = values[0]
-    
-    # 计算转化率
-    conversion_rates = []
-    for i, value in enumerate(values):
-        if total_leads > 0:
-            rate = (value / total_leads * 100)
-            conversion_rates.append(f"{rate:.1f}%")
-        else:
-            conversion_rates.append("0%")
-    
+# 创建样式优化的漏斗图
+def generate_optimized_funnel_chart(cities, cities_data, stages):
+    # 设置颜色渐变，使用一种和谐的颜色方案
+    color_scale = ['#FF6B6B', '#FF9F9F', '#FFB3B3', '#FFC6C6', '#FFE0E0', '#FFECF2']
+
     # 创建漏斗图
-    fig = go.Figure()
-    
-    # 主要漏斗
-    fig.add_trace(go.Funnel(
-        y=[f"{stage}<br>{rate}" for stage, rate in zip(stages, conversion_rates)],
-        x=values,
-        textposition="inside",
-        textinfo="value+text",
-        textfont=dict(size=14, color="white", family="Arial"),
-        marker=dict(
-            color=values,
-            colorscale="Teal",  # 使用Teal色系，更专业
-            line=dict(width=3, color="white")
-        ),
-        connector=dict(
-            line=dict(color="grey", width=2, dash="dot")
-        ),
-        opacity=0.85
-    ))
-    
-    # 添加阶段转化率标注
-    annotations = []
-    for i in range(1, len(values)):
-        if values[i-1] > 0:
-            stage_rate = (values[i] / values[i-1] * 100)
-            annotations.append(dict(
-                x=0.02,
-                y=i-0.1,
-                xref="paper",
-                yref="y",
-                text=f"→ {stage_rate:.1f}%",
-                showarrow=False,
-                font=dict(size=11, color="darkred"),
-                bgcolor="lightyellow",
-                bordercolor="darkred",
-                borderwidth=1
-            ))
-    
-    fig.update_layout(
-        title={
-            'text': f"<b>{city_name}转化漏斗</b><br><sub>总转化率: {conversion_rates[-1]}</sub>",
-            'x': 0.5,
-            'xanchor': 'center',
-            'font': {'size': 18, 'color': 'darkblue'}
-        },
-        plot_bgcolor='rgba(245,245,245,0.8)',
-        paper_bgcolor='white',
-        font=dict(size=12, family="Microsoft YaHei"),
+    fig_funnel = make_subplots(rows=1, cols=3, subplot_titles=[f'{city} 转化漏斗' for city in cities])
+
+    # 为每个城市绘制漏斗图
+    for i, city in enumerate(cities):
+        values = cities_data[city]
+        
+        # 使用渐变色来填充每个阶段
+        fig_funnel.add_trace(
+            go.Funnel(
+                name=city,
+                y=stages,
+                x=values,
+                textinfo="value+percent initial",
+                marker=dict(color=color_scale),
+                showlegend=False,
+                opacity=0.8,  # 增加透明度效果
+            ),
+            row=1, col=i+1
+        )
+        
+    fig_funnel.update_layout(
         height=500,
-        margin=dict(t=80, b=50, l=80, r=50),
-        annotations=annotations,
-        showlegend=False
+        showlegend=False,
+        title="城市转化漏斗分析",
+        font=dict(size=12),  # 设置字体大小
+        template="plotly_dark"  # 使用深色主题
     )
     
-    return fig
+    fig_funnel.update_traces(
+        textposition="inside",  # 在图形内部显示文本
+        hoverinfo="text",  # 鼠标悬停时显示详细信息
+        textfont=dict(size=14),  # 文本字体大小
+    )
 
-def create_horizontal_funnel(city_data, city_name, stages):
-    """创建水平漏斗图"""
-    values = city_data
-    
-    fig = go.Figure(go.Funnel(
-        y=stages,
-        x=values,
-        orientation="h",
-        textposition="inside",
-        textinfo="value+percent initial",
-        textfont=dict(size=12, color="white"),
-        marker=dict(
-            color=px.colors.sequential.Viridis,
-            line=dict(width=2, color="white")
-        ),
-        opacity=0.9
-    ))
-    
-    fig.update_layout(
-        title=f"<b>{city_name}水平视图</b>",
-        plot_bgcolor='white',
-        height=400,
-        margin=dict(t=60, b=50, l=100, r=50)
+    fig_funnel.update_layout(
+        margin=dict(t=30, b=30),  # 调整边距
+        plot_bgcolor="rgba(0, 0, 0, 0)",  # 背景透明
     )
     
-    return fig
+    return fig_funnel
 
+# 汇总数据看板
 def generate_charts():
     # ==================== 汇总看板表格 ====================
     st.header("📈 数据汇总看板")
@@ -217,43 +165,11 @@ def generate_charts():
     fig_cost.update_layout(height=500, showlegend=False)
     st.plotly_chart(fig_cost, use_container_width=True)
 
-    # ==================== 转化漏斗 - 优化后的美观漏斗图 ====================
+    # ==================== 转化漏斗 - Plotly漏斗图 ====================
     st.header("📊 转化漏斗分析")
     
-    # 创建标签页显示不同类型的漏斗图
-    tab1, tab2 = st.tabs(["垂直漏斗图", "水平视图"])
-    
-    with tab1:
-        # 垂直漏斗图 - 三列布局
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            fig_funnel1 = create_beautiful_funnel(cities_data['从化'], '从化', stages)
-            st.plotly_chart(fig_funnel1, use_container_width=True)
-            
-        with col2:
-            fig_funnel2 = create_beautiful_funnel(cities_data['中山'], '中山', stages)
-            st.plotly_chart(fig_funnel2, use_container_width=True)
-            
-        with col3:
-            fig_funnel3 = create_beautiful_funnel(cities_data['江门'], '江门', stages)
-            st.plotly_chart(fig_funnel3, use_container_width=True)
-    
-    with tab2:
-        # 水平漏斗图 - 三列布局
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            fig_h1 = create_horizontal_funnel(cities_data['从化'], '从化', stages)
-            st.plotly_chart(fig_h1, use_container_width=True)
-            
-        with col2:
-            fig_h2 = create_horizontal_funnel(cities_data['中山'], '中山', stages)
-            st.plotly_chart(fig_h2, use_container_width=True)
-            
-        with col3:
-            fig_h3 = create_horizontal_funnel(cities_data['江门'], '江门', stages)
-            st.plotly_chart(fig_h3, use_container_width=True)
+    fig_funnel = generate_optimized_funnel_chart(cities, cities_data, stages)
+    st.plotly_chart(fig_funnel, use_container_width=True)
 
     # ==================== 未转化原因分析 - Plotly水平柱状图 ====================
     st.header("❓ 未转化客户原因分析")
