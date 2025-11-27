@@ -38,7 +38,7 @@ for city in cities:
         values.append(value)
     cities_data[city] = values
 
-# 未转化原因数据 - 扩展为四个维度
+# 未转化原因数据 - 简化版本
 st.sidebar.header("🔍 未转化原因分析数据")
 
 # 1. 无效线索原因
@@ -81,32 +81,19 @@ def create_beautiful_funnel(city_data, city_name, stages):
     
     # 定义漂亮的颜色方案
     color_schemes = {
-        '从化': ['#FF6B6B', '#FF8E8E', '#FFB1B1', '#FFD4D4', '#FFE8E8', '#FFF5F5'],  # 红色系
-        '中山': ['#4ECDC4', '#88D8D0', '#A8E6DD', '#C8F3EC', '#E1F8F5', '#F0FCFA'],  # 青色系
-        '江门': ['#45B7D1', '#7BC9E0', '#9AD6E8', '#B9E3F0', '#D4EDF7', '#EAF6FB']   # 蓝色系
+        '从化': ['#FF6B6B', '#FF8E8E', '#FFB1B1', '#FFD4D4', '#FFE8E8', '#FFF5F5'],
+        '中山': ['#4ECDC4', '#88D8D0', '#A8E6DD', '#C8F3EC', '#E1F8F5', '#F0FCFA'],
+        '江门': ['#45B7D1', '#7BC9E0', '#9AD6E8', '#B9E3F0', '#D4EDF7', '#EAF6FB']
     }
     
     colors = color_schemes.get(city_name, px.colors.sequential.Blues)
     
-    # 计算转化率
-    conversion_rates = []
-    for i, value in enumerate(values):
-        if total_leads > 0:
-            rate = (value / total_leads * 100)
-            conversion_rates.append(f"{rate:.1f}%")
-        else:
-            conversion_rates.append("0%")
-    
-    # 创建漏斗图
-    fig = go.Figure()
-    
-    # 主要漏斗
-    fig.add_trace(go.Funnel(
+    fig = go.Figure(go.Funnel(
         y=stages,
         x=values,
         textposition="inside",
         textinfo="value+percent initial",
-        textfont=dict(size=14, color="white", family="Arial", weight="bold"),
+        textfont=dict(size=14, color="white", weight="bold"),
         marker=dict(
             color=colors[:len(values)],
             line=dict(width=3, color="white")
@@ -117,38 +104,18 @@ def create_beautiful_funnel(city_data, city_name, stages):
         opacity=0.9
     ))
     
-    # 添加阶段转化率标注
-    annotations = []
-    for i in range(1, len(values)):
-        if values[i-1] > 0:
-            stage_rate = (values[i] / values[i-1] * 100)
-            annotations.append(dict(
-                x=0.95,
-                y=i-0.1,
-                xref="paper",
-                yref="y",
-                text=f"阶段转化: {stage_rate:.1f}%",
-                showarrow=False,
-                font=dict(size=11, color="darkred"),
-                bgcolor="rgba(255,255,240,0.8)",
-                bordercolor="darkred",
-                borderwidth=1,
-                borderpad=4
-            ))
-    
     fig.update_layout(
         title={
-            'text': f"<b>{city_name}转化漏斗</b><br><sub style='color: #666;'>总转化率: {conversion_rates[-1]}</sub>",
+            'text': f"<b>{city_name}转化漏斗</b>",
             'x': 0.5,
             'xanchor': 'center',
-            'font': {'size': 18, 'color': '#2C3E50', 'family': 'Arial'}
+            'font': {'size': 18, 'color': '#2C3E50'}
         },
         plot_bgcolor='rgba(248,248,248,0.8)',
         paper_bgcolor='white',
-        font=dict(size=12, family="Microsoft YaHei"),
+        font=dict(size=12),
         height=500,
-        margin=dict(t=100, b=50, l=80, r=50),
-        annotations=annotations,
+        margin=dict(t=80, b=50, l=80, r=50),
         showlegend=False
     )
     
@@ -158,7 +125,6 @@ def create_horizontal_funnel(city_data, city_name, stages):
     """创建水平漏斗图"""
     values = city_data
     
-    # 定义水平漏斗图的颜色
     horizontal_colors = ['#FF9999', '#99CCFF', '#99FF99', '#FFD700', '#FF99CC', '#C299FF']
     
     fig = go.Figure(go.Funnel(
@@ -194,7 +160,6 @@ def create_gradient_funnel(city_data, city_name, stages):
     """创建渐变色彩漏斗图"""
     values = city_data
     
-    # 使用Plotly的渐变色
     fig = go.Figure(go.Funnel(
         y=stages,
         x=values,
@@ -203,7 +168,7 @@ def create_gradient_funnel(city_data, city_name, stages):
         textfont=dict(size=13, color="white", weight="bold"),
         marker=dict(
             color=values,
-            colorscale='Viridis',  # 使用Viridis渐变色
+            colorscale='Viridis',
             line=dict(width=3, color="white")
         ),
         opacity=0.85
@@ -225,45 +190,31 @@ def create_gradient_funnel(city_data, city_name, stages):
     return fig
 
 # ==================== 未转化分析函数定义 ====================
-def create_reason_chart(reason_data, title, chart_type="bar"):
-    """创建原因分析图表"""
+def create_simple_reason_chart(reason_data, title):
+    """创建简单的柱状图分析"""
     fig = make_subplots(rows=1, cols=3, subplot_titles=[f'{city}{title}' for city in cities])
     
-    colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD']
+    colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4']
     
     for i, city in enumerate(cities):
         city_data = reason_data[city]
         reasons = list(city_data.keys())
         counts = list(city_data.values())
         
-        if chart_type == "bar":
-            fig.add_trace(
-                go.Bar(
-                    name=city,
-                    y=reasons,
-                    x=counts,
-                    orientation='h',
-                    marker_color=colors[:len(reasons)],
-                    text=counts,
-                    textposition='auto',
-                    showlegend=False
-                ),
-                row=1, col=i+1
-            )
-            fig.update_xaxes(title_text="数量", row=1, col=i+1)
-        else:
-            # 饼图
-            fig.add_trace(
-                go.Pie(
-                    labels=reasons,
-                    values=counts,
-                    name=city,
-                    marker_colors=colors[:len(reasons)],
-                    textinfo='percent+label',
-                    showlegend=False
-                ),
-                row=1, col=i+1
-            )
+        fig.add_trace(
+            go.Bar(
+                name=city,
+                y=reasons,
+                x=counts,
+                orientation='h',
+                marker_color=colors[:len(reasons)],
+                text=counts,
+                textposition='auto',
+                showlegend=False
+            ),
+            row=1, col=i+1
+        )
+        fig.update_xaxes(title_text="数量", row=1, col=i+1)
     
     fig.update_layout(
         height=400,
@@ -273,6 +224,21 @@ def create_reason_chart(reason_data, title, chart_type="bar"):
     )
     return fig
 
+def create_pie_chart_for_city(reason_data, city, title):
+    """为单个城市创建饼图"""
+    city_data = reason_data[city]
+    reasons = list(city_data.keys())
+    counts = list(city_data.values())
+    
+    fig = px.pie(
+        values=counts,
+        names=reasons,
+        title=f'{city}{title}',
+        color_discrete_sequence=px.colors.qualitative.Set3
+    )
+    fig.update_traces(textposition='inside', textinfo='percent+label')
+    return fig
+
 def create_comparison_chart(reason_data, title):
     """创建城市对比图表"""
     all_reasons = set()
@@ -280,7 +246,6 @@ def create_comparison_chart(reason_data, title):
         all_reasons.update(city_data.keys())
     all_reasons = list(all_reasons)
     
-    # 准备数据
     comparison_data = []
     for city in cities:
         city_data = reason_data[city]
@@ -307,59 +272,6 @@ def create_comparison_chart(reason_data, title):
     fig.update_layout(
         height=500,
         xaxis_tickangle=-45
-    )
-    
-    return fig
-
-def create_sankey_diagram(reason_data, title):
-    """创建桑基图显示原因分布"""
-    labels = []
-    source = []
-    target = []
-    value = []
-    
-    # 添加城市节点
-    for i, city in enumerate(cities):
-        labels.append(city)
-    
-    # 添加原因节点
-    reason_offset = len(cities)
-    all_reasons = set()
-    for city_data in reason_data.values():
-        all_reasons.update(city_data.keys())
-    
-    reason_list = list(all_reasons)
-    for i, reason in enumerate(reason_list):
-        labels.append(reason)
-    
-    # 创建连接
-    for i, city in enumerate(cities):
-        city_data = reason_data[city]
-        for j, reason in enumerate(reason_list):
-            if reason in city_data:
-                source.append(i)  # 城市索引
-                target.append(reason_offset + j)  # 原因索引
-                value.append(city_data[reason])
-    
-    fig = go.Figure(data=[go.Sankey(
-        node=dict(
-            pad=15,
-            thickness=20,
-            line=dict(color="black", width=0.5),
-            label=labels,
-            color=["#FF6B6B", "#4ECDC4", "#45B7D1"] + ["#96CEB4"] * len(reason_list)
-        ),
-        link=dict(
-            source=source,
-            target=target,
-            value=value
-        )
-    )])
-    
-    fig.update_layout(
-        title_text=f"<b>{title} - 桑基图</b>",
-        font_size=12,
-        height=500
     )
     
     return fig
@@ -441,7 +353,6 @@ def generate_charts():
     # ==================== 转化漏斗 - 优化后的美观漏斗图 ====================
     st.header("🎨 转化漏斗分析")
     
-    # 创建标签页显示不同类型的漏斗图
     tab1, tab2, tab3 = st.tabs(["🎯 垂直漏斗图", "📊 水平视图", "🌈 渐变色视图"])
     
     with tab1:
@@ -483,10 +394,9 @@ def generate_charts():
             fig_g3 = create_gradient_funnel(cities_data['江门'], '江门', stages)
             st.plotly_chart(fig_g3, use_container_width=True)
 
-    # ==================== 未转化客户分析 - 四个维度的标签页 ====================
+    # ==================== 未转化客户分析 - 简化版本 ====================
     st.header("🔍 未转化客户深度分析")
     
-    # 创建四个分析维度的标签页
     reason_tab1, reason_tab2, reason_tab3, reason_tab4 = st.tabs([
         "❌ 无效线索原因", 
         "📞 未转化线索原因", 
@@ -497,20 +407,22 @@ def generate_charts():
     with reason_tab1:
         st.subheader("无效线索原因分析")
         
-        # 在无效线索标签页内再创建子标签页
-        subtab1, subtab2, subtab3 = st.tabs(["📊 柱状图分析", "🥧 饼图分析", "🔗 桑基图"])
+        # 柱状图分析
+        fig_invalid_bar = create_simple_reason_chart(invalid_reasons_data, "无效线索原因")
+        st.plotly_chart(fig_invalid_bar, use_container_width=True)
         
-        with subtab1:
-            fig_invalid_bar = create_reason_chart(invalid_reasons_data, "无效线索原因", "bar")
-            st.plotly_chart(fig_invalid_bar, use_container_width=True)
-            
-        with subtab2:
-            fig_invalid_pie = create_reason_chart(invalid_reasons_data, "无效线索原因", "pie")
-            st.plotly_chart(fig_invalid_pie, use_container_width=True)
-            
-        with subtab3:
-            fig_invalid_sankey = create_sankey_diagram(invalid_reasons_data, "无效线索原因分布")
-            st.plotly_chart(fig_invalid_sankey, use_container_width=True)
+        # 饼图分析 - 三列布局
+        st.subheader("各城市无效线索原因占比")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            fig_pie1 = create_pie_chart_for_city(invalid_reasons_data, '从化', '无效线索原因')
+            st.plotly_chart(fig_pie1, use_container_width=True)
+        with col2:
+            fig_pie2 = create_pie_chart_for_city(invalid_reasons_data, '中山', '无效线索原因')
+            st.plotly_chart(fig_pie2, use_container_width=True)
+        with col3:
+            fig_pie3 = create_pie_chart_for_city(invalid_reasons_data, '江门', '无效线索原因')
+            st.plotly_chart(fig_pie3, use_container_width=True)
         
         # 城市对比图
         fig_invalid_compare = create_comparison_chart(invalid_reasons_data, "各城市无效线索原因对比")
@@ -519,19 +431,20 @@ def generate_charts():
     with reason_tab2:
         st.subheader("未转化线索原因分析（接通但无效）")
         
-        subtab1, subtab2, subtab3 = st.tabs(["📊 柱状图分析", "🥧 饼图分析", "🔗 桑基图"])
+        fig_not_conv_bar = create_simple_reason_chart(not_converted_reasons_data, "未转化线索原因")
+        st.plotly_chart(fig_not_conv_bar, use_container_width=True)
         
-        with subtab1:
-            fig_not_conv_bar = create_reason_chart(not_converted_reasons_data, "未转化线索原因", "bar")
-            st.plotly_chart(fig_not_conv_bar, use_container_width=True)
-            
-        with subtab2:
-            fig_not_conv_pie = create_reason_chart(not_converted_reasons_data, "未转化线索原因", "pie")
-            st.plotly_chart(fig_not_conv_pie, use_container_width=True)
-            
-        with subtab3:
-            fig_not_conv_sankey = create_sankey_diagram(not_converted_reasons_data, "未转化线索原因分布")
-            st.plotly_chart(fig_not_conv_sankey, use_container_width=True)
+        st.subheader("各城市未转化线索原因占比")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            fig_pie1 = create_pie_chart_for_city(not_converted_reasons_data, '从化', '未转化线索原因')
+            st.plotly_chart(fig_pie1, use_container_width=True)
+        with col2:
+            fig_pie2 = create_pie_chart_for_city(not_converted_reasons_data, '中山', '未转化线索原因')
+            st.plotly_chart(fig_pie2, use_container_width=True)
+        with col3:
+            fig_pie3 = create_pie_chart_for_city(not_converted_reasons_data, '江门', '未转化线索原因')
+            st.plotly_chart(fig_pie3, use_container_width=True)
         
         fig_not_conv_compare = create_comparison_chart(not_converted_reasons_data, "各城市未转化线索原因对比")
         st.plotly_chart(fig_not_conv_compare, use_container_width=True)
@@ -539,19 +452,20 @@ def generate_charts():
     with reason_tab3:
         st.subheader("未转化客户原因分析（有效但未成客户）")
         
-        subtab1, subtab2, subtab3 = st.tabs(["📊 柱状图分析", "🥧 饼图分析", "🔗 桑基图"])
+        fig_not_client_bar = create_simple_reason_chart(not_client_reasons_data, "未转化客户原因")
+        st.plotly_chart(fig_not_client_bar, use_container_width=True)
         
-        with subtab1:
-            fig_not_client_bar = create_reason_chart(not_client_reasons_data, "未转化客户原因", "bar")
-            st.plotly_chart(fig_not_client_bar, use_container_width=True)
-            
-        with subtab2:
-            fig_not_client_pie = create_reason_chart(not_client_reasons_data, "未转化客户原因", "pie")
-            st.plotly_chart(fig_not_client_pie, use_container_width=True)
-            
-        with subtab3:
-            fig_not_client_sankey = create_sankey_diagram(not_client_reasons_data, "未转化客户原因分布")
-            st.plotly_chart(fig_not_client_sankey, use_container_width=True)
+        st.subheader("各城市未转化客户原因占比")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            fig_pie1 = create_pie_chart_for_city(not_client_reasons_data, '从化', '未转化客户原因')
+            st.plotly_chart(fig_pie1, use_container_width=True)
+        with col2:
+            fig_pie2 = create_pie_chart_for_city(not_client_reasons_data, '中山', '未转化客户原因')
+            st.plotly_chart(fig_pie2, use_container_width=True)
+        with col3:
+            fig_pie3 = create_pie_chart_for_city(not_client_reasons_data, '江门', '未转化客户原因')
+            st.plotly_chart(fig_pie3, use_container_width=True)
         
         fig_not_client_compare = create_comparison_chart(not_client_reasons_data, "各城市未转化客户原因对比")
         st.plotly_chart(fig_not_client_compare, use_container_width=True)
@@ -559,19 +473,20 @@ def generate_charts():
     with reason_tab4:
         st.subheader("未到访原因分析（客户但未到访）")
         
-        subtab1, subtab2, subtab3 = st.tabs(["📊 柱状图分析", "🥧 饼图分析", "🔗 桑基图"])
+        fig_not_visit_bar = create_simple_reason_chart(not_visit_reasons_data, "未到访原因")
+        st.plotly_chart(fig_not_visit_bar, use_container_width=True)
         
-        with subtab1:
-            fig_not_visit_bar = create_reason_chart(not_visit_reasons_data, "未到访原因", "bar")
-            st.plotly_chart(fig_not_visit_bar, use_container_width=True)
-            
-        with subtab2:
-            fig_not_visit_pie = create_reason_chart(not_visit_reasons_data, "未到访原因", "pie")
-            st.plotly_chart(fig_not_visit_pie, use_container_width=True)
-            
-        with subtab3:
-            fig_not_visit_sankey = create_sankey_diagram(not_visit_reasons_data, "未到访原因分布")
-            st.plotly_chart(fig_not_visit_sankey, use_container_width=True)
+        st.subheader("各城市未到访原因占比")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            fig_pie1 = create_pie_chart_for_city(not_visit_reasons_data, '从化', '未到访原因')
+            st.plotly_chart(fig_pie1, use_container_width=True)
+        with col2:
+            fig_pie2 = create_pie_chart_for_city(not_visit_reasons_data, '中山', '未到访原因')
+            st.plotly_chart(fig_pie2, use_container_width=True)
+        with col3:
+            fig_pie3 = create_pie_chart_for_city(not_visit_reasons_data, '江门', '未到访原因')
+            st.plotly_chart(fig_pie3, use_container_width=True)
         
         fig_not_visit_compare = create_comparison_chart(not_visit_reasons_data, "各城市未到访原因对比")
         st.plotly_chart(fig_not_visit_compare, use_container_width=True)
