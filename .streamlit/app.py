@@ -4,8 +4,6 @@ import numpy as np
 import pandas as pd
 
 # 设置中文字体
-plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei']
-plt.rcParams['axes.unicode_minus'] = False
 
 # 网页标题
 st.set_page_config(page_title="销售数据分析系统", layout="wide")
