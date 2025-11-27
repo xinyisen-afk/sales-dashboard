@@ -73,6 +73,158 @@ not_visit_reasons_data = {
     '江门': {'时间冲突': 2, '距离太远': 1, '兴趣减弱': 1, '其他安排': 1}
 }
 
+# ==================== 漏斗图函数定义 ====================
+def create_beautiful_funnel(city_data, city_name, stages):
+    """创建美观的漏斗图"""
+    values = city_data
+    total_leads = values[0]
+    
+    # 定义漂亮的颜色方案
+    color_schemes = {
+        '从化': ['#FF6B6B', '#FF8E8E', '#FFB1B1', '#FFD4D4', '#FFE8E8', '#FFF5F5'],  # 红色系
+        '中山': ['#4ECDC4', '#88D8D0', '#A8E6DD', '#C8F3EC', '#E1F8F5', '#F0FCFA'],  # 青色系
+        '江门': ['#45B7D1', '#7BC9E0', '#9AD6E8', '#B9E3F0', '#D4EDF7', '#EAF6FB']   # 蓝色系
+    }
+    
+    colors = color_schemes.get(city_name, px.colors.sequential.Blues)
+    
+    # 计算转化率
+    conversion_rates = []
+    for i, value in enumerate(values):
+        if total_leads > 0:
+            rate = (value / total_leads * 100)
+            conversion_rates.append(f"{rate:.1f}%")
+        else:
+            conversion_rates.append("0%")
+    
+    # 创建漏斗图
+    fig = go.Figure()
+    
+    # 主要漏斗
+    fig.add_trace(go.Funnel(
+        y=stages,
+        x=values,
+        textposition="inside",
+        textinfo="value+percent initial",
+        textfont=dict(size=14, color="white", family="Arial", weight="bold"),
+        marker=dict(
+            color=colors[:len(values)],
+            line=dict(width=3, color="white")
+        ),
+        connector=dict(
+            line=dict(color="rgba(128,128,128,0.5)", width=2, dash="dot")
+        ),
+        opacity=0.9
+    ))
+    
+    # 添加阶段转化率标注
+    annotations = []
+    for i in range(1, len(values)):
+        if values[i-1] > 0:
+            stage_rate = (values[i] / values[i-1] * 100)
+            annotations.append(dict(
+                x=0.95,
+                y=i-0.1,
+                xref="paper",
+                yref="y",
+                text=f"阶段转化: {stage_rate:.1f}%",
+                showarrow=False,
+                font=dict(size=11, color="darkred"),
+                bgcolor="rgba(255,255,240,0.8)",
+                bordercolor="darkred",
+                borderwidth=1,
+                borderpad=4
+            ))
+    
+    fig.update_layout(
+        title={
+            'text': f"<b>{city_name}转化漏斗</b><br><sub style='color: #666;'>总转化率: {conversion_rates[-1]}</sub>",
+            'x': 0.5,
+            'xanchor': 'center',
+            'font': {'size': 18, 'color': '#2C3E50', 'family': 'Arial'}
+        },
+        plot_bgcolor='rgba(248,248,248,0.8)',
+        paper_bgcolor='white',
+        font=dict(size=12, family="Microsoft YaHei"),
+        height=500,
+        margin=dict(t=100, b=50, l=80, r=50),
+        annotations=annotations,
+        showlegend=False
+    )
+    
+    return fig
+
+def create_horizontal_funnel(city_data, city_name, stages):
+    """创建水平漏斗图"""
+    values = city_data
+    
+    # 定义水平漏斗图的颜色
+    horizontal_colors = ['#FF9999', '#99CCFF', '#99FF99', '#FFD700', '#FF99CC', '#C299FF']
+    
+    fig = go.Figure(go.Funnel(
+        y=stages,
+        x=values,
+        orientation="h",
+        textposition="inside",
+        textinfo="value+percent initial",
+        textfont=dict(size=12, color="white", weight="bold"),
+        marker=dict(
+            color=horizontal_colors[:len(values)],
+            line=dict(width=2, color="white")
+        ),
+        opacity=0.9
+    ))
+    
+    fig.update_layout(
+        title={
+            'text': f"<b>{city_name}水平视图</b>",
+            'x': 0.5,
+            'xanchor': 'center',
+            'font': {'size': 16, 'color': '#2C3E50'}
+        },
+        plot_bgcolor='rgba(248,248,248,0.8)',
+        paper_bgcolor='white',
+        height=400,
+        margin=dict(t=80, b=50, l=100, r=50)
+    )
+    
+    return fig
+
+def create_gradient_funnel(city_data, city_name, stages):
+    """创建渐变色彩漏斗图"""
+    values = city_data
+    
+    # 使用Plotly的渐变色
+    fig = go.Figure(go.Funnel(
+        y=stages,
+        x=values,
+        textposition="inside",
+        textinfo="value+percent initial",
+        textfont=dict(size=13, color="white", weight="bold"),
+        marker=dict(
+            color=values,
+            colorscale='Viridis',  # 使用Viridis渐变色
+            line=dict(width=3, color="white")
+        ),
+        opacity=0.85
+    ))
+    
+    fig.update_layout(
+        title={
+            'text': f"<b>{city_name}渐变色视图</b>",
+            'x': 0.5,
+            'xanchor': 'center',
+            'font': {'size': 16, 'color': '#2C3E50'}
+        },
+        plot_bgcolor='rgba(240,240,240,0.5)',
+        paper_bgcolor='white',
+        height=450,
+        margin=dict(t=80, b=50, l=80, r=50)
+    )
+    
+    return fig
+
+# ==================== 未转化分析函数定义 ====================
 def create_reason_chart(reason_data, title, chart_type="bar"):
     """创建原因分析图表"""
     fig = make_subplots(rows=1, cols=3, subplot_titles=[f'{city}{title}' for city in cities])
@@ -212,6 +364,7 @@ def create_sankey_diagram(reason_data, title):
     
     return fig
 
+# ==================== 主图表生成函数 ====================
 def generate_charts():
     # ==================== 汇总看板表格 ====================
     st.header("📈 数据汇总看板")
@@ -442,7 +595,7 @@ generate_charts()
 
 # 刷新按钮
 if st.sidebar.button("🔄 刷新图表"):
-    generate_charts()
+    st.rerun()
 
 st.sidebar.markdown("---")
-st.sidebar.success("🔍 未转化分析现在有四个维度的深度分析！")
+st.sidebar.success("🎉 系统运行正常！所有功能都可使用")
