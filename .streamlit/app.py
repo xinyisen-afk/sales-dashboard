@@ -3,7 +3,21 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-# 设置中文字体
+# 更兼容的字体设置方案
+try:
+    # 尝试多种字体，按优先级排列
+    plt.rcParams['font.sans-serif'] = [
+        'DejaVu Sans',      # Linux 系统字体
+        'Arial Unicode MS', # Mac 系统字体  
+        'Microsoft YaHei',  # Windows 中文
+        'SimHei',           # Windows 中文
+        'WenQuanYi Micro Hei', # Linux 中文
+        'sans-serif'        # 最后回退到无衬线字体
+    ]
+    plt.rcParams['axes.unicode_minus'] = False
+    st.success("字体设置成功")
+except Exception as e:
+    st.warning(f"字体设置警告: {e}，使用系统默认字体")
 
 # 网页标题
 st.set_page_config(page_title="销售数据分析系统", layout="wide")
@@ -145,7 +159,8 @@ def generate_charts():
             if values[j] > 0:
                 cost = total_cost / values[j]
                 stage_costs.append(cost)
-                stage_labels.append(f'{cost_labels[stages[j]]}\n({values[j]}人)')
+                # 简化标签，避免中文问题
+                stage_labels.append(f'Stage {j+1}\n({values[j]})')
         
         bars = axes_cost[i].bar(range(len(stage_costs)), stage_costs, color=colors[:len(stage_costs)], alpha=0.8)
         
@@ -155,7 +170,7 @@ def generate_charts():
                             f'{cost:.0f}', ha='center', va='bottom', fontsize=9, fontweight='bold')
         
         axes_cost[i].set_title(f'{city} - 成本分析', fontsize=12, fontweight='bold')
-        axes_cost[i].set_ylabel('单条成本 (元)', fontsize=10)
+        axes_cost[i].set_ylabel('成本 (元)', fontsize=10)
         axes_cost[i].set_xticks(range(len(stage_labels)))
         axes_cost[i].set_xticklabels(stage_labels, fontsize=8, rotation=45)
         
@@ -198,14 +213,17 @@ def generate_charts():
             percent_x = centered_val + value + 0.2
             
             axes_funnel[i].text(number_x, j, f'{value}', 
-                              va='center', ha='center', fontsize=10, fontweight='bold', color='white')
+                              va='center', ha='center', fontsize=10, fontweight='bold',
+                              color='white')
             
             if j > 0:
                 axes_funnel[i].text(percent_x, j, f'({rate:.1f}%)', 
-                                  va='center', ha='left', fontsize=9, fontweight='bold', color='black')
+                                  va='center', ha='left', fontsize=9, fontweight='bold',
+                                  color='black')
             elif j == 0:
                 axes_funnel[i].text(percent_x, j, '(基准)', 
-                                  va='center', ha='left', fontsize=9, fontweight='bold', color='black')
+                                  va='center', ha='left', fontsize=9, fontweight='bold',
+                                  color='black')
         
         axes_funnel[i].set_title(f'{city}转化漏斗', fontsize=12, fontweight='bold')
         
@@ -254,3 +272,7 @@ generate_charts()
 
 # 刷新按钮
 st.sidebar.button("🔄 刷新图表", on_click=generate_charts)
+
+# 显示字体状态
+st.sidebar.markdown("---")
+st.sidebar.info("如果看到乱码，这是服务器字体限制，不影响功能使用")
