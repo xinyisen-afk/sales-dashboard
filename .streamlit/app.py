@@ -6,8 +6,8 @@ from plotly.subplots import make_subplots
 import numpy as np
 
 # 网页标题
-st.set_page_config(page_title="产业园销售数据分析系统", layout="wide")
-st.title("🏭 三城市产业园销售漏斗分析系统")
+st.set_page_config(page_title="销售数据分析系统", layout="wide")
+st.title("🎯 三城市销售数据分析系统")
 
 # 初始化session state
 if 'cities_data' not in st.session_state:
@@ -15,19 +15,18 @@ if 'cities_data' not in st.session_state:
 if 'reasons_data' not in st.session_state:
     st.session_state.reasons_data = {}
 
-# 定义全局变量
-cities = ['从化', '中山', '江门']
-stages = ['线索总量', '接通数', '有效线索', '意向客户', '到访客户', '成交客户']
-
 # 侧边栏 - 数据输入
 st.sidebar.header("📊 核心数据输入")
 cost_per_lead = st.sidebar.number_input("单条线索成本(元)", value=320, min_value=0)
 
 # 城市数据输入 - 使用折叠器组织
+cities = ['从化', '中山', '江门']
+stages = ['线索量', '接通数', '有效数', '客户数', '到访数', '成交数']
+
 with st.sidebar.expander("🏙️ 各城市转化数据", expanded=True):
     default_values = {
         '从化': [21, 19, 17, 8, 4, 2],
-        '中山': [30, 25, 20, 11, 5, 1], 
+        '中山': [30, 25, 20, 11, 5, 1],
         '江门': [6, 6, 5, 5, 1, 0]
     }
 
@@ -38,7 +37,7 @@ with st.sidebar.expander("🏙️ 各城市转化数据", expanded=True):
         for i, stage in enumerate(stages):
             col_idx = i % 2
             value = cols[col_idx].number_input(
-                f"{stage}", 
+                f"{stage}",
                 value=default_values[city][i],
                 key=f"{city}_{stage}",
                 min_value=0
@@ -46,80 +45,80 @@ with st.sidebar.expander("🏙️ 各城市转化数据", expanded=True):
             values.append(value)
         st.session_state.cities_data[city] = values
 
-# 未转化原因数据 - 按照优化后的五阶段模型
+# 未转化原因数据 - 使用折叠器组织
 with st.sidebar.expander("🔍 未转化原因数据", expanded=False):
     
-    # 1. 未接通原因
-    st.subheader("📞 未接通原因")
-    no_connect_data = {}
-    for city in cities:
-        st.write(f"**{city}**")
-        cols = st.columns(2)
-        no_connect_data[city] = {
-            '号码问题': cols[0].number_input(f"{city}-号码问题", value=2, key=f"no_connect_{city}_1", min_value=0),
-            '多次呼转': cols[1].number_input(f"{city}-多次呼转", value=2, key=f"no_connect_{city}_2", min_value=0),
-            '直接拒绝': cols[0].number_input(f"{city}-直接拒绝", value=1, key=f"no_connect_{city}_3", min_value=0),
-            '非目标联系人': cols[1].number_input(f"{city}-非目标联系人", value=1, key=f"no_connect_{city}_4", min_value=0)
-        }
-    st.session_state.reasons_data['no_connect'] = no_connect_data
-
-    # 2. 无效线索原因
+    # 1. 无效线索原因
     st.subheader("❌ 无效线索原因")
     invalid_data = {}
     for city in cities:
         st.write(f"**{city}**")
         cols = st.columns(2)
         invalid_data[city] = {
-            '明确无需求': cols[0].number_input(f"{city}-明确无需求", value=1, key=f"invalid_{city}_1", min_value=0),
-            '需求严重不匹配': cols[1].number_input(f"{city}-需求严重不匹配", value=1, key=f"invalid_{city}_2", min_value=0),
-            '非目标客群': cols[0].number_input(f"{city}-非目标客群", value=0, key=f"invalid_{city}_3", min_value=0),
-            '信息无效': cols[1].number_input(f"{city}-信息无效", value=0, key=f"invalid_{city}_4", min_value=0)
+            '空号错号': cols[0].number_input(f"{city}-空号错号", value=3, key=f"invalid_{city}_1"),
+            '无人接听': cols[1].number_input(f"{city}-无人接听", value=2, key=f"invalid_{city}_2"),
+            '拒绝沟通': cols[0].number_input(f"{city}-拒绝沟通", value=1, key=f"invalid_{city}_3"),
+            '信息错误': cols[1].number_input(f"{city}-信息错误", value=1, key=f"invalid_{city}_4")
         }
     st.session_state.reasons_data['invalid'] = invalid_data
 
-    # 3. 未转意向客户原因
-    st.subheader("🎯 未转意向客户原因")
-    not_intention_data = {}
+    # 2. 未转化线索原因
+    st.subheader("📞 未转化线索原因")
+    not_converted_data = {}
     for city in cities:
         st.write(f"**{city}**")
         cols = st.columns(2)
-        not_intention_data[city] = {
-            '区位抗性': cols[0].number_input(f"{city}-区位抗性", value=4, key=f"not_intention_{city}_1", min_value=0),
-            '产品不匹配': cols[1].number_input(f"{city}-产品不匹配", value=3, key=f"not_intention_{city}_2", min_value=0),
-            '意向度低/周期长': cols[0].number_input(f"{city}-意向度低/周期长", value=2, key=f"not_intention_{city}_3", min_value=0),
-            '客户失联': cols[1].number_input(f"{city}-客户失联", value=1, key=f"not_intention_{city}_4", min_value=0)
+        not_converted_data[city] = {
+            '需求不符': cols[0].number_input(f"{city}-需求不符", value=4, key=f"not_conv_{city}_1"),
+            '预算不足': cols[1].number_input(f"{city}-预算不足", value=3, key=f"not_conv_{city}_2"),
+            '竞品选择': cols[0].number_input(f"{city}-竞品选择", value=2, key=f"not_conv_{city}_3"),
+            '时机不对': cols[1].number_input(f"{city}-时机不对", value=1, key=f"not_conv_{city}_4")
         }
-    st.session_state.reasons_data['not_intention'] = not_intention_data
+    st.session_state.reasons_data['not_converted'] = not_converted_data
+
+    # 3. 未转化客户原因
+    st.subheader("👥 未转化客户原因")
+    not_client_data = {}
+    for city in cities:
+        st.write(f"**{city}**")
+        cols = st.columns(2)
+        not_client_data[city] = {
+            '价格问题': cols[0].number_input(f"{city}-价格问题", value=4, key=f"not_client_{city}_1"),
+            '服务担忧': cols[1].number_input(f"{city}-服务担忧", value=2, key=f"not_client_{city}_2"),
+            '方案不符': cols[0].number_input(f"{city}-方案不符", value=2, key=f"not_client_{city}_3"),
+            '跟进中': cols[1].number_input(f"{city}-跟进中", value=1, key=f"not_client_{city}_4")
+        }
+    st.session_state.reasons_data['not_client'] = not_client_data
 
     # 4. 未到访原因
-    st.subheader("🚗 未到访原因")
+    st.subheader("🚫 未到访原因")
     not_visit_data = {}
     for city in cities:
         st.write(f"**{city}**")
         cols = st.columns(2)
         not_visit_data[city] = {
-            '选择竞品': cols[0].number_input(f"{city}-选择竞品", value=2, key=f"not_visit_{city}_1", min_value=0),
-            '产品/时机不符': cols[1].number_input(f"{city}-产品/时机不符", value=1, key=f"not_visit_{city}_2", min_value=0),
-            '邀约失败': cols[0].number_input(f"{city}-邀约失败", value=1, key=f"not_visit_{city}_3", min_value=0),
-            '区位一票否决': cols[1].number_input(f"{city}-区位一票否决", value=0, key=f"not_visit_{city}_4", min_value=0)
+            '时间冲突': cols[0].number_input(f"{city}-时间冲突", value=2, key=f"not_visit_{city}_1"),
+            '距离太远': cols[1].number_input(f"{city}-距离太远", value=1, key=f"not_visit_{city}_2"),
+            '兴趣减弱': cols[0].number_input(f"{city}-兴趣减弱", value=1, key=f"not_visit_{city}_3"),
+            '其他安排': cols[1].number_input(f"{city}-其他安排", value=0, key=f"not_visit_{city}_4")
         }
     st.session_state.reasons_data['not_visit'] = not_visit_data
 
-    # 5. 未成交原因
-    st.subheader("💼 未成交原因")
+    # 5. 未成交原因 - 新增
+    st.subheader("💸 未成交原因")
     not_deal_data = {}
     for city in cities:
         st.write(f"**{city}**")
         cols = st.columns(2)
         not_deal_data[city] = {
-            '价格因素': cols[0].number_input(f"{city}-价格因素", value=2, key=f"not_deal_{city}_1", min_value=0),
-            '竞争失利': cols[1].number_input(f"{city}-竞争失利", value=1, key=f"not_deal_{city}_2", min_value=0),
-            '客户内部决策变动': cols[0].number_input(f"{city}-客户内部决策变动", value=1, key=f"not_deal_{city}_3", min_value=0),
-            '硬性条件不符': cols[1].number_input(f"{city}-硬性条件不符", value=0, key=f"not_deal_{city}_4", min_value=0)
+            '价格太贵': cols[0].number_input(f"{city}-价格太贵", value=2, key=f"not_deal_{city}_1"),
+            '被竞品抢走': cols[1].number_input(f"{city}-被竞品抢走", value=1, key=f"not_deal_{city}_2"),
+            '资金问题': cols[0].number_input(f"{city}-资金问题", value=1, key=f"not_deal_{city}_3"),
+            '决策延迟': cols[1].number_input(f"{city}-决策延迟", value=0, key=f"not_deal_{city}_4")
         }
     st.session_state.reasons_data['not_deal'] = not_deal_data
 
-# ==================== 漏斗图函数定义 ====================
+# ==================== 漏斗图函数定义 (保持不变) ====================
 def create_beautiful_funnel(city_data, city_name, stages):
     """创建美观的漏斗图"""
     values = city_data
@@ -212,239 +211,135 @@ def create_horizontal_funnel(city_data, city_name, stages):
     
     return fig
 
-# ==================== 新增分析函数 ====================
-def create_loss_analysis_chart():
-    """创建未转化原因总体分析图"""
-    fig = make_subplots(
-        rows=2, 
-        cols=3,
-        subplot_titles=[
-            '从化-未转化原因分布', '中山-未转化原因分布', '江门-未转化原因分布',
-            '从化-各阶段流失率', '中山-各阶段流失率', '江门-各阶段流失率'
-        ],
-        vertical_spacing=0.15,
-        horizontal_spacing=0.1
-    )
+def create_simple_reason_chart(reason_data, title):
+    """创建简单的柱状图分析"""
+    fig = make_subplots(rows=1, cols=3, subplot_titles=[f'{city}{title}' for city in cities])
     
-    # 颜色方案
-    stage_colors = ['#FF6B6B', '#FF8E53', '#FFD166', '#06D6A0', '#118AB2']
-    stage_labels = ['未接通', '无效线索', '未转意向', '未到访', '未成交']
+    colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4']
     
     for i, city in enumerate(cities):
-        # 第一行：未转化原因分布饼图
-        stage_data = []
-        labels = []
+        city_data = reason_data[city]
+        reasons = list(city_data.keys())
+        counts = list(city_data.values())
         
-        for stage in ['no_connect', 'invalid', 'not_intention', 'not_visit', 'not_deal']:
-            data = st.session_state.reasons_data[stage][city]
-            total = sum(data.values())
-            stage_data.append(total)
-        
-        # 只显示有数据的部分
-        valid_indices = [idx for idx, val in enumerate(stage_data) if val > 0]
-        valid_data = [stage_data[idx] for idx in valid_indices]
-        valid_labels = [stage_labels[idx] for idx in valid_indices]
-        valid_colors = [stage_colors[idx] for idx in valid_indices]
-        
-        if sum(valid_data) > 0:
-            fig.add_trace(
-                go.Pie(
-                    labels=valid_labels,
-                    values=valid_data,
-                    marker=dict(colors=valid_colors),
-                    hole=0.4,
-                    showlegend=False,
-                    textinfo='percent+label'
-                ),
-                row=1, col=i+1
-            )
-        
-        # 第二行：各阶段流失率柱状图
-        cities_data = st.session_state.cities_data[city]
-        if len(cities_data) >= 6:
-            loss_rates = []
-            for j in range(len(cities_data)-1):
-                if cities_data[j] > 0:
-                    loss_rate = (cities_data[j] - cities_data[j+1]) / cities_data[j] * 100
-                    loss_rates.append(loss_rate)
-                else:
-                    loss_rates.append(0)
-            
-            loss_stages = ['线索→接通', '接通→有效', '有效→意向', '意向→到访', '到访→成交']
-            
-            fig.add_trace(
-                go.Bar(
-                    x=loss_stages,
-                    y=loss_rates,
-                    marker_color='#45B7D1',
-                    name='流失率',
-                    text=[f'{rate:.1f}%' for rate in loss_rates],
-                    textposition='auto'
-                ),
-                row=2, col=i+1
-            )
-            fig.update_yaxes(title_text="流失率(%)", range=[0, 100], row=2, col=i+1)
+        fig.add_trace(
+            go.Bar(
+                name=city,
+                y=reasons,
+                x=counts,
+                orientation='h',
+                marker_color=colors[:len(reasons)],
+                text=counts,
+                textposition='auto',
+                showlegend=False
+            ),
+            row=1, col=i+1
+        )
+        fig.update_xaxes(title_text="数量", row=1, col=i+1)
     
     fig.update_layout(
-        height=800,
+        height=400,
         showlegend=False,
-        title_text="<b>未转化客户深度分析总览</b>",
+        title_text=f"<b>{title}分析</b>",
         title_x=0.5
     )
     return fig
 
-def create_cross_city_comparison():
-    """创建跨城市原因对比图"""
-    all_reasons_data = {}
-    
-    # 收集所有原因类型
-    for stage in ['no_connect', 'invalid', 'not_intention', 'not_visit', 'not_deal']:
-        stage_data = st.session_state.reasons_data[stage]
-        for city in cities:
-            for reason, count in stage_data[city].items():
-                if reason not in all_reasons_data:
-                    all_reasons_data[reason] = {city_val: 0 for city_val in cities}
-                all_reasons_data[reason][city] = count
-    
-    # 选择TOP 10原因
-    reason_totals = {reason: sum(data.values()) for reason, data in all_reasons_data.items()}
-    top_reasons = sorted(reason_totals.items(), key=lambda x: x[1], reverse=True)[:10]
-    
-    fig = go.Figure()
-    
-    colors = ['#FF6B6B', '#4ECDC4', '#45B7D1']
-    
-    for i, city in enumerate(cities):
-        city_counts = [all_reasons_data[reason][city] for reason, _ in top_reasons]
-        fig.add_trace(go.Bar(
-            name=city,
-            y=[reason for reason, _ in top_reasons],
-            x=city_counts,
-            orientation='h',
-            marker_color=colors[i],
-            text=city_counts,
-            textposition='auto'
-        ))
-    
-    fig.update_layout(
-        title="<b>Top 10未转化原因 - 三城市对比</b>",
-        barmode='group',
-        height=500,
-        xaxis_title="数量",
-        yaxis_title="未转化原因",
-        showlegend=True
+def create_pie_chart_for_reason(reason_data, title):
+    """为原因数据创建饼图分析"""
+    fig = make_subplots(
+        rows=1, 
+        cols=3, 
+        subplot_titles=[f'{city}{title}占比' for city in cities],
+        specs=[[{"type": "pie"}, {"type": "pie"}, {"type": "pie"}]]
     )
     
+    for i, city in enumerate(cities):
+        city_data = reason_data[city]
+        reasons = list(city_data.keys())
+        counts = list(city_data.values())
+        
+        fig.add_trace(
+            go.Pie(
+                labels=reasons,
+                values=counts,
+                name=city,
+                textinfo='percent+label',
+                showlegend=False,
+                hole=0.4
+            ),
+            row=1, col=i+1
+        )
+    
+    fig.update_layout(
+        height=400,
+        showlegend=False,
+        title_text=f"<b>{title}占比分析</b>",
+        title_x=0.5
+    )
     return fig
 
-def create_stage_analysis_tabs():
-    """创建各阶段详细分析标签页"""
-    stage_configs = {
-        'no_connect': {
-            'title': '📞 未接通分析',
-            'description': '首次接触未能与关键人建立有效沟通',
-            'color': '#FF6B6B'
-        },
-        'invalid': {
-            'title': '❌ 无效线索分析',
-            'description': '接通后判断无跟进价值的线索',
-            'color': '#FF8E53'
-        },
-        'not_intention': {
-            'title': '🎯 未转意向分析',
-            'description': '已沟通但未能激发进一步了解的欲望',
-            'color': '#FFD166'
-        },
-        'not_visit': {
-            'title': '🚗 未到访分析',
-            'description': '有意向但未能促成现场看房',
-            'color': '#06D6A0'
-        },
-        'not_deal': {
-            'title': '💼 未成交分析',
-            'description': '到访后未能签约成交',
-            'color': '#118AB2'
-        }
+# ==================== 交互式文字洞察生成函数 (新增) ====================
+def get_top_reason(reason_data, city, default_message="无明显流失"):
+    """获取某个城市某个流失阶段的主要原因及其占比"""
+    city_data = reason_data.get(city, {})
+    if not city_data:
+        return default_message
+    
+    total = sum(city_data.values())
+    if total == 0:
+        return default_message
+
+    # 找到数量最多的原因
+    max_reason = max(city_data, key=city_data.get)
+    max_count = city_data[max_reason]
+    percentage = (max_count / total) * 100
+    
+    # 构建洞察文本
+    return f"**{max_reason}**（**{max_count}**条，占比 **{percentage:.1f}%**）"
+
+def generate_insights(reasons_data):
+    """生成并展示未转化客户深度分析的文字洞察"""
+    st.header("💡 转化流失关键洞察")
+    
+    # 定义分析的阶段和对应的数据键
+    analysis_stages = {
+        "无效线索": ('invalid', "❌ 线索阶段，主要流失原因为:"),
+        "未转化线索": ('not_converted', "📞 接通阶段，线索未有效的主要原因在于:"),
+        "未转化客户": ('not_client', "👥 有效线索未转化为客户，主要流失原因为:"),
+        "未到访": ('not_visit', "🚫 客户未到访的关键障碍是:"),
+        "未成交": ('not_deal', "💸 到访后未成交的瓶颈是:")
     }
     
-    tabs = st.tabs([config['title'] for config in stage_configs.values()])
     
-    for i, (stage_key, config) in enumerate(stage_configs.items()):
-        with tabs[i]:
-            st.markdown(f"<h3 style='color:{config['color']}'>{config['title']}</h3>", unsafe_allow_html=True)
-            st.caption(config['description'])
+    cols = st.columns(len(cities)) # 每行三个城市
+    
+    for city_index, city in enumerate(cities):
+        with cols[city_index]:
+            st.subheader(f"城市: {city}")
+            st.markdown("---")
             
-            # 创建两个图表：分布图和城市对比图
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                # 各城市该阶段原因分布
-                stage_data = st.session_state.reasons_data[stage_key]
-                fig1 = make_subplots(rows=1, cols=3, subplot_titles=[f'{city}' for city in cities])
+            for stage_name, (data_key, prefix) in analysis_stages.items():
                 
-                for j, city in enumerate(cities):
-                    reasons = list(stage_data[city].keys())
-                    counts = list(stage_data[city].values())
-                    
-                    fig1.add_trace(
-                        go.Bar(
-                            x=reasons,
-                            y=counts,
-                            marker_color=config['color'],
-                            showlegend=False,
-                            text=counts,
-                            textposition='auto'
-                        ),
-                        row=1, col=j+1
-                    )
+                # 获取该阶段的主要原因洞察
+                top_reason_text = get_top_reason(reasons_data.get(data_key, {}), city)
                 
-                fig1.update_layout(
-                    height=400,
-                    title_text=f"<b>各城市{config['title']}分布</b>",
-                    showlegend=False
-                )
-                st.plotly_chart(fig1, use_container_width=True)
-            
-            with col2:
-                # 该阶段原因堆叠柱状图
-                reasons = list(stage_data[cities[0]].keys())
-                fig2 = go.Figure()
+                # 使用不同的颜色和图标来区分阶段
+                icon = {
+                    "无效线索": "⛔",
+                    "未转化线索": "🗣️",
+                    "未转化客户": "💰",
+                    "未到访": "🛣️",
+                    "未成交": "💔"
+                }.get(stage_name, "➡️")
                 
-                for city in cities:
-                    counts = list(stage_data[city].values())
-                    fig2.add_trace(go.Bar(
-                        name=city,
-                        x=reasons,
-                        y=counts,
-                        text=counts,
-                        textposition='auto'
-                    ))
+                st.markdown(f"""
+                    #### {icon} {stage_name}
+                    {prefix} {top_reason_text}
+                """)
                 
-                fig2.update_layout(
-                    barmode='group',
-                    height=400,
-                    title_text=f"<b>{config['title']} - 三城市对比</b>",
-                    xaxis_title="原因类型",
-                    yaxis_title="数量",
-                    showlegend=True
-                )
-                st.plotly_chart(fig2, use_container_width=True)
-            
-            # 显示关键洞察
-            st.markdown("### 📊 关键洞察")
-            total_counts = {}
-            for city in cities:
-                total = sum(stage_data[city].values())
-                total_counts[city] = total
-            
-            # 找出最主要的原因
-            for city in cities:
-                if total_counts[city] > 0:
-                    main_reason = max(stage_data[city], key=stage_data[city].get)
-                    main_count = stage_data[city][main_reason]
-                    percentage = (main_count / total_counts[city]) * 100
-                    
-                    st.info(f"**{city}**：最主要原因为 **{main_reason}**，占比 **{percentage:.1f}%** ({main_count}/{total_counts[city]})")
+            st.markdown("---")
+
 
 # ==================== 主图表生成函数 ====================
 def generate_charts():
@@ -571,87 +466,80 @@ def generate_charts():
             fig_h3 = create_horizontal_funnel(cities_data['江门'], '江门', stages)
             st.plotly_chart(fig_h3, use_container_width=True)
 
-    # ==================== 新增：未转化客户深度分析 ====================
-    st.header("🔍 未转化客户深度分析")
-    st.markdown("基于五阶段转化漏斗模型：**未接通 → 无效线索 → 未转意向 → 未到访 → 未成交**")
+    # ==================== 交互式文字洞察 (新增的重点部分) ====================
+    generate_insights(reasons_data)
+
+    # ==================== 未转化客户深度分析 - 柱状图 ====================
+    st.header("🔍 未转化客户深度分析 - 柱状图")
     
-    # 总览图表
-    st.subheader("📊 总体分析")
-    fig_loss_overall = create_loss_analysis_chart()
-    st.plotly_chart(fig_loss_overall, use_container_width=True)
+    reason_tab1, reason_tab2, reason_tab3, reason_tab4, reason_tab5 = st.tabs([
+        "❌ 无效线索原因",
+        "📞 未转化线索原因",
+        "👥 未转化客户原因",
+        "🚫 未到访原因",
+        "💸 未成交原因"
+    ])
     
-    # 跨城市对比
-    st.subheader("🌍 跨城市原因对比")
-    fig_cross_city = create_cross_city_comparison()
-    st.plotly_chart(fig_cross_city, use_container_width=True)
+    with reason_tab1:
+        st.subheader("无效线索原因分析")
+        fig_invalid_bar = create_simple_reason_chart(reasons_data['invalid'], "无效线索原因")
+        st.plotly_chart(fig_invalid_bar, use_container_width=True)
     
-    # 各阶段详细分析
-    st.subheader("📋 各阶段详细分析")
-    create_stage_analysis_tabs()
+    with reason_tab2:
+        st.subheader("未转化线索原因分析（接通但无效）")
+        fig_not_conv_bar = create_simple_reason_chart(reasons_data['not_converted'], "未转化线索原因")
+        st.plotly_chart(fig_not_conv_bar, use_container_width=True)
     
-    # ==================== 洞察与建议 ====================
-    st.header("💡 洞察与建议")
+    with reason_tab3:
+        st.subheader("未转化客户原因分析（有效但未成客户）")
+        fig_not_client_bar = create_simple_reason_chart(reasons_data['not_client'], "未转化客户原因")
+        st.plotly_chart(fig_not_client_bar, use_container_width=True)
     
-    # 计算关键指标
-    insights_data = []
-    for city in cities:
-        values = cities_data[city]
-        total_leads = values[0]
-        deals = values[5]
-        
-        # 计算总转化率
-        overall_rate = (deals / total_leads * 100) if total_leads > 0 else 0
-        
-        # 找出最大的流失点
-        max_loss_stage = ''
-        max_loss_rate = 0
-        
-        for i in range(len(values)-1):
-            if values[i] > 0:
-                loss_rate = (values[i] - values[i+1]) / values[i] * 100
-                if loss_rate > max_loss_rate:
-                    max_loss_rate = loss_rate
-                    max_loss_stage = stages[i]
-        
-        # 找出主要未转化原因
-        main_reason = ''
-        main_reason_count = 0
-        for stage_data in reasons_data.values():
-            city_data = stage_data[city]
-            for reason, count in city_data.items():
-                if count > main_reason_count:
-                    main_reason_count = count
-                    main_reason = reason
-        
-        insights_data.append({
-            '城市': city,
-            '总转化率': f"{overall_rate:.1f}%",
-            '主要流失点': max_loss_stage,
-            '流失率': f"{max_loss_rate:.1f}%",
-            '主要未转化原因': main_reason if main_reason_count > 0 else "暂无数据"
-        })
+    with reason_tab4:
+        st.subheader("未到访原因分析（客户但未到访）")
+        fig_not_visit_bar = create_simple_reason_chart(reasons_data['not_visit'], "未到访原因")
+        st.plotly_chart(fig_not_visit_bar, use_container_width=True)
     
-    insights_df = pd.DataFrame(insights_data)
-    st.dataframe(insights_df, use_container_width=True)
+    with reason_tab5:
+        st.subheader("未成交原因分析（到访但未成交）")
+        fig_not_deal_bar = create_simple_reason_chart(reasons_data['not_deal'], "未成交原因")
+        st.plotly_chart(fig_not_deal_bar, use_container_width=True)
+
+    # ==================== 未转化客户深度分析 - 饼图 ====================
+    st.header("🥧 未转化客户深度分析 - 饼图")
     
-    # 基于洞察提供建议
-    st.markdown("### 🎯 优化建议")
+    pie_tab1, pie_tab2, pie_tab3, pie_tab4, pie_tab5 = st.tabs([
+        "❌ 无效线索占比",
+        "📞 未转化线索占比",
+        "👥 未转化客户占比",
+        "🚫 未到访占比",
+        "💸 未成交占比"
+    ])
     
-    for city in cities:
-        values = cities_data[city]
-        total_leads = values[0]
-        deals = values[5]
-        
-        if deals == 0:
-            st.warning(f"**{city}**：暂无成交，建议重点检查 **线索质量** 和 **销售跟进策略**，确保有效线索的筛选和跟进效率。")
-        elif total_leads > 0:
-            overall_rate = deals / total_leads * 100
-            if overall_rate < 10:
-                st.warning(f"**{city}**：转化率偏低 ({overall_rate:.1f}%)，建议优化转化漏斗中的薄弱环节。")
-            elif overall_rate > 20:
-                st.success(f"**{city}**：转化表现良好 ({overall_rate:.1f}%)，建议保持当前策略并尝试扩大线索规模。")
-            else:
-                st.info(f"**{city}**：转化率中等 ({overall_rate:.1f}%)，有提升空间，建议针对性优化流失率最高的环节。")
+    with pie_tab1:
+        st.subheader("无效线索原因占比分析")
+        fig_invalid_pie = create_pie_chart_for_reason(reasons_data['invalid'], "无效线索原因")
+        st.plotly_chart(fig_invalid_pie, use_container_width=True)
+    
+    with pie_tab2:
+        st.subheader("未转化线索原因占比分析")
+        fig_not_conv_pie = create_pie_chart_for_reason(reasons_data['not_converted'], "未转化线索原因")
+        st.plotly_chart(fig_not_conv_pie, use_container_width=True)
+    
+    with pie_tab3:
+        st.subheader("未转化客户原因占比分析")
+        fig_not_client_pie = create_pie_chart_for_reason(reasons_data['not_client'], "未转化客户原因")
+        st.plotly_chart(fig_not_client_pie, use_container_width=True)
+    
+    with pie_tab4:
+        st.subheader("未到访原因占比分析")
+        fig_not_visit_pie = create_pie_chart_for_reason(reasons_data['not_visit'], "未到访原因")
+        st.plotly_chart(fig_not_visit_pie, use_container_width=True)
+    
+    with pie_tab5:
+        st.subheader("未成交原因占比分析")
+        fig_not_deal_pie = create_pie_chart_for_reason(reasons_data['not_deal'], "未成交原因")
+        st.plotly_chart(fig_not_deal_pie, use_container_width=True)
 
 # 显示图表
 generate_charts()
@@ -663,8 +551,7 @@ st.sidebar.info("""
 1. 点击展开器修改数据
 2. 数据会自动保存和更新
 3. 使用标签页切换不同视图
-4. 所有图表都是交互式的
-5. 关注"洞察与建议"获取优化方向
+4. 所有图表和洞察都是**交互式**的
 """)
 
-st.sidebar.success("✅ 系统优化完成！基于五阶段漏斗模型")
+st.sidebar.success("✅ 系统优化完成！")
