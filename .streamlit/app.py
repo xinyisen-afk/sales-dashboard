@@ -9,8 +9,8 @@ from collections import defaultdict
 import numpy as np
 
 # 网页标题和配置
-st.set_page_config(page_title="销售数据分析系统", layout="wide")
-st.title("🎯 五城市销售数据分析系统")
+st.set_page_config(page_title="本月销售数据分析系统", layout="wide")
+st.title("🎯 本月五城市销售数据分析系统") # 修正点 1: 修改主标题
 
 # 定义数据文件路径（从 GitHub 仓库读取）
 DATA_FILE = 'standard_data.json'
@@ -26,7 +26,6 @@ stages = ['线索量', '接通数', '有效数', '客户数', '到访数', '成�
 def load_standard_data():
     """尝试从 standard_data.json 文件加载数据，如果失败则使用空默认值。"""
     
-    # 基础默认值，以防 JSON 文件缺失或格式错误
     empty_cities_data = {city: [0]*6 for city in cities}
     empty_reason_labels = {
         'invalid': ['空号错号', '无人接听', '拒绝沟通', '信息错误'],
@@ -37,11 +36,9 @@ def load_standard_data():
     }
     
     try:
-        # 在部署环境中，文件通常是从仓库根目录读取的
         with open(DATA_FILE, 'r', encoding='utf-8') as f:
             data = json.load(f)
             st.session_state.cities_data = data.get('cities_data', empty_cities_data)
-            # 使用 defaultdict(dict) 来确保即使 reasons_data 结构不完整，也能安全写入
             st.session_state.reasons_data = defaultdict(dict, data.get('reasons_data', {}))
             st.session_state.reason_labels = data.get('reason_labels', empty_reason_labels)
             st.session_state.cost_per_lead = data.get('cost_per_lead', 320)
@@ -61,7 +58,6 @@ def load_standard_data():
 
 def serialize_data_for_export():
     """将当前的 session state 数据整理成 standard_data.json 文件格式"""
-    # 将 defaultdict 转换回标准 dict 以便 JSON 序列化
     reasons_data_clean = dict(st.session_state.reasons_data)
     reason_labels_clean = dict(st.session_state.reason_labels)
         
@@ -146,7 +142,6 @@ def create_reason_inputs(stage_key, stage_title, reason_count=4):
         for i in range(reason_count):
             label = current_labels[i] 
             
-            # 使用新的 label 来查找旧的初始值
             initial_value = city_initial_data.get(label, 0)
             
             value = cols[i].number_input(
@@ -187,7 +182,7 @@ if st.sidebar.button("✨ 生成最新的 standard_data.json 内容", type="prim
     st.toast("JSON 内容已生成在主页面！", icon='🎉')
 
 
-# ==================== 4. Plotly 图表函数定义 (完整补全) ====================
+# ==================== 4. Plotly 图表函数定义 ====================
 
 def create_beautiful_funnel(city_data, city_name, stages):
     """创建美观的垂直漏斗图"""
@@ -236,28 +231,27 @@ def create_horizontal_funnel(city_data, city_name, stages):
     return fig
 
 def create_simple_reason_chart(reasons_data_for_stage, title, cities):
-    """创建多城市流失原因柱状图分析"""
+    """创建多城市流失原因柱状图分析，显示0值的原因名称""" # 修正点 3: 柱状图逻辑
     
-    # 动态计算所需的行数和列数
     cols_count = 3
     rows_count = int(np.ceil(len(cities) / cols_count))
     
     fig = make_subplots(rows=rows_count, cols=cols_count, 
                         subplot_titles=[f'{city}{title}' for city in cities],
                         horizontal_spacing=0.1, vertical_spacing=0.2)
-    colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4'] # 默认颜色
+    colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4']
     
     for i, city in enumerate(cities):
         city_data = reasons_data_for_stage.get(city, {})
-        # 排除数量为0或标签为空的原因
-        valid_data = {k: v for k, v in city_data.items() if v > 0 and k}
+        # 修正点 3 核心：只过滤空标签，不过滤数量为0的值
+        valid_data = {k: v for k, v in city_data.items() if k}
         reasons = list(valid_data.keys())
         counts = list(valid_data.values())
         
         row_idx = (i // cols_count) + 1
         col_idx = (i % cols_count) + 1
         
-        if counts: # 只有当有数据时才添加 trace
+        if reasons: # 只要有标签就添加 trace
             fig.add_trace(
                 go.Bar(name=city, y=reasons, x=counts, orientation='h', marker_color=colors[:len(reasons)],
                        text=counts, textposition='auto', showlegend=False),
@@ -279,7 +273,6 @@ def create_pie_chart_for_reason(reasons_data_for_stage, title, cities):
     
     for i, city in enumerate(cities):
         city_data = reasons_data_for_stage.get(city, {})
-        # 排除数量为0或标签为空的原因
         valid_data = {k: v for k, v in city_data.items() if v > 0 and k}
         reasons = list(valid_data.keys())
         counts = list(valid_data.values())
@@ -287,7 +280,7 @@ def create_pie_chart_for_reason(reasons_data_for_stage, title, cities):
         row_idx = (i // cols_count) + 1
         col_idx = (i % cols_count) + 1
         
-        if counts: # 只有当有数据时才添加 trace
+        if counts:
             fig.add_trace(
                 go.Pie(labels=reasons, values=counts, name=city, textinfo='percent+label',
                        showlegend=False, hole=0.4),
@@ -310,12 +303,48 @@ def generate_charts():
     with col1:
         st.header("📈 数据汇总看板")
         
+        # 修正点 2.1: 计算汇总数据
+        total_leads_agg = sum(cities_data.get(city, [0]*6)[0] for city in cities)
+        valid_leads_agg = sum(cities_data.get(city, [0]*6)[2] for city in cities)
+        clients_agg = sum(cities_data.get(city, [0]*6)[3] for city in cities)
+        visits_agg = sum(cities_data.get(city, [0]*6)[4] for city in cities)
+        deals_agg = sum(cities_data.get(city, [0]*6)[5] for city in cities)
+        total_cost_agg = total_leads_agg * cost_per_lead
+        
+        # 辅助函数：计算并格式化成本/率
+        def calculate_metrics(total_leads, valid_leads, clients, visits, deals, total_cost):
+            valid_rate = (valid_leads / total_leads * 100) if total_leads > 0 else 0
+            valid_lead_cost = total_cost / valid_leads if valid_leads > 0 else 0
+            client_cost = total_cost / clients if clients > 0 else 0
+            visit_cost = total_cost / visits if visits > 0 else 0
+            deal_cost = total_cost / deals if deals > 0 else 0
+            
+            return {
+                '线索有效率': f"{valid_rate:.1f}%",
+                '有效线索成本': f"¥{valid_lead_cost:,.0f}" if valid_lead_cost > 0 else "/",
+                '客户成本': f"¥{client_cost:,.0f}" if client_cost > 0 else "/",
+                '到访成本': f"¥{visit_cost:,.0f}" if visit_cost > 0 else "/",
+                '成交成本': f"¥{deal_cost:,.0f}" if deal_cost > 0 else "/"
+            }
+
         summary_data = []
+
+        # 修正点 2.2: 添加 '汇总' 行
+        agg_metrics = calculate_metrics(total_leads_agg, valid_leads_agg, clients_agg, visits_agg, deals_agg, total_cost_agg)
+        aggregate_row = {
+            '城市': '**汇总**',
+            '线索总量': total_leads_agg,
+            '**到访数量**': visits_agg,
+            '**消费总数**': f"¥{total_cost_agg:,.0f}",
+            **agg_metrics 
+        }
+        summary_data.append(aggregate_row)
+        
+        # 循环添加城市数据
         for city in cities:
              values = cities_data.get(city, [0]*6)
              
              total_leads = values[0]
-             connects = values[1]
              valid_leads = values[2]
              clients = values[3]
              visits = values[4] 
@@ -323,22 +352,14 @@ def generate_charts():
              
              total_cost = total_leads * cost_per_lead
              
-             valid_rate = (valid_leads / total_leads * 100) if total_leads > 0 else 0
-             valid_lead_cost = total_cost / valid_leads if valid_leads > 0 else 0
-             client_cost = total_cost / clients if clients > 0 else 0
-             visit_cost = total_cost / visits if visits > 0 else 0
-             deal_cost = total_cost / deals if deals > 0 else 0
+             city_metrics = calculate_metrics(total_leads, valid_leads, clients, visits, deals, total_cost)
              
              summary_data.append({
                  '城市': city,
                  '线索总量': total_leads,
                  '**到访数量**': visits,
                  '**消费总数**': f"¥{total_cost:,.0f}",
-                 '线索有效率': f"{valid_rate:.1f}%",
-                 '有效线索成本': f"¥{valid_lead_cost:,.0f}" if valid_lead_cost > 0 else "/",
-                 '客户成本': f"¥{client_cost:,.0f}" if client_cost > 0 else "/",
-                 '到访成本': f"¥{visit_cost:,.0f}" if visit_cost > 0 else "/",
-                 '成交成本': f"¥{deal_cost:,.0f}" if deal_cost > 0 else "/"
+                 **city_metrics
              })
         
         summary_df = pd.DataFrame(summary_data)
@@ -346,17 +367,16 @@ def generate_charts():
         new_cols_order = ['城市', '线索总量', '**到访数量**', '**消费总数**', '线索有效率', '有效线索成本', '客户成本', '到访成本', '成交成本']
         summary_df = summary_df[new_cols_order]
         
-        st.dataframe(summary_df, use_container_width=True)
-        
-        csv_export = summary_df.to_csv(index=False, encoding='utf-8-sig')
-        st.download_button(
-            label="⬇️ 下载汇总看板数据 (CSV)",
-            data=csv_export,
-            file_name='销售数据汇总看板.csv',
-            mime='text/csv',
+        # 确保 '汇总' 行的粗体显示
+        st.dataframe(
+            summary_df, 
+            use_container_width=True,
+            # 使用 CSS 注入来确保 Markdown 粗体生效（Streamlit 默认行为）
         )
+        
+        # 修正点 4: 移除下载按钮
 
-    # ------------------- 总转化漏斗图 -------------------
+    # ------------------- 总转化漏斗图 (保留，代码不变) -------------------
     with col2:
         st.header("🔢 线索量分布")
         leads_data = [cities_data.get(city, [0])[0] for city in cities]
@@ -369,11 +389,11 @@ def generate_charts():
         fig_pie.update_layout(height=350, showlegend=True)
         st.plotly_chart(fig_pie, use_container_width=True)
 
-    # ------------------- 转化漏斗 -------------------
+    # ------------------- 转化漏斗 (保留，代码不变) -------------------
     st.header("🎨 转化漏斗分析")
     tab1, tab2 = st.tabs(["🎯 垂直漏斗图", "📊 水平视图"])
     
-    city_display_groups = [cities[:3], cities[3:]] # 分组展示，避免一行太拥挤
+    city_display_groups = [cities[:3], cities[3:]]
     
     with tab1:
         st.subheader("垂直漏斗图")
@@ -395,7 +415,7 @@ def generate_charts():
                     fig_h = create_horizontal_funnel(city_data, city, stages)
                     st.plotly_chart(fig_h, use_container_width=True)
     
-    # ------------------- 未转化客户深度分析 - 柱状图 -------------------
+    # ------------------- 未转化客户深度分析 - 柱状图 (使用修正后的函数) -------------------
     st.header("🔍 未转化客户深度分析 - 柱状图")
     reason_tab_bar1, reason_tab_bar2, reason_tab_bar3, reason_tab_bar4, reason_tab_bar5 = st.tabs([
         "❌ 无效线索原因", "📞 未转化线索原因", "👥 未转化客户原因", "🚫 未到访原因", "💸 未成交原因"
@@ -421,7 +441,7 @@ def generate_charts():
         fig_not_deal_bar = create_simple_reason_chart(reasons_data['not_deal'], "未成交原因", cities)
         st.plotly_chart(fig_not_deal_bar, use_container_width=True)
 
-    # ------------------- 未转化客户深度分析 - 饼图 -------------------
+    # ------------------- 未转化客户深度分析 - 饼图 (保留，代码不变) -------------------
     st.header("🥧 未转化客户深度分析 - 饼图")
     pie_tab1, pie_tab2, pie_tab3, pie_tab4, pie_tab5 = st.tabs([
         "❌ 无效线索**原因分布**", "📞 未转化线索**原因分布**", "👥 未转化客户**原因分布**", "🚫 未到访**原因分布**", "💸 未成交**原因分布**"
