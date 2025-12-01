@@ -14,12 +14,31 @@ if 'cities_data' not in st.session_state:
     st.session_state.cities_data = {}
 if 'reasons_data' not in st.session_state:
     st.session_state.reasons_data = {}
+# 新增：初始化原因标签列表
+if 'reason_labels' not in st.session_state:
+    st.session_state.reason_labels = {
+        'invalid': ['空号错号', '无人接听', '拒绝沟通', '信息错误'],
+        'not_converted': ['需求不符', '预算不足', '竞品选择', '时机不对'],
+        'not_client': ['价格问题', '服务担忧', '方案不符', '跟进中'],
+        'not_visit': ['时间冲突', '距离太远', '兴趣减弱', '其他安排'],
+        'not_deal': ['价格太贵', '被竞品抢走', '资金问题', '决策延迟']
+    }
+    
+# 默认值
+default_values_reasons = {
+    'invalid': [3, 2, 1, 1],
+    'not_converted': [4, 3, 2, 1],
+    'not_client': [4, 2, 2, 1],
+    'not_visit': [2, 1, 1, 0],
+    'not_deal': [2, 1, 1, 0]
+}
+
 
 # 侧边栏 - 数据输入
 st.sidebar.header("📊 核心数据输入")
 cost_per_lead = st.sidebar.number_input("单条线索成本(元)", value=320, min_value=0)
 
-# 城市数据输入 - 使用折叠器组织
+# 城市数据输入 - 使用折叠器组织 (保持不变)
 cities = ['从化', '中山', '江门']
 stages = ['线索量', '接通数', '有效数', '客户数', '到访数', '成交数']
 
@@ -44,81 +63,79 @@ with st.sidebar.expander("🏙️ 各城市转化数据", expanded=True):
             )
             values.append(value)
         st.session_state.cities_data[city] = values
+        
+        
+# ======== 核心改动区域：未转化原因数据输入互动化 ========
+def create_reason_inputs(stage_key, stage_title, reason_count=4):
+    """创建互动式的流失原因标签和数量输入"""
+    
+    st.subheader(stage_title)
+    
+    # 1. 首先让用户输入原因标签名称 (全局标签)
+    st.markdown("##### 📌 **原因标签设置 (影响所有城市)**")
+    label_cols = st.columns(reason_count)
+    current_labels = []
+    for i in range(reason_count):
+        label = label_cols[i].text_input(
+            f"原因 {i+1} 名称", 
+            value=st.session_state.reason_labels[stage_key][i],
+            key=f"label_{stage_key}_{i}"
+        )
+        current_labels.append(label)
+    st.session_state.reason_labels[stage_key] = current_labels # 保存更新后的标签
+    
+    # 2. 然后为每个城市输入对应数量
+    st.markdown("##### 🔢 **各城市流失数量**")
+    reason_data = {}
+    for city in cities:
+        st.write(f"**{city}**")
+        cols = st.columns(reason_count)
+        city_reason_data = {}
+        for i in range(reason_count):
+            # 使用用户自定义的标签作为输入框的描述
+            label = current_labels[i] 
+            
+            # 使用默认值或之前的输入值
+            default_val = default_values_reasons.get(stage_key, [0]*reason_count)[i]
+            
+            # 由于 Streamlit 的 key 机制，我们使用固定的 stage_key 和 index 来确保输入框值稳定
+            value = cols[i].number_input(
+                f"{label} ({city})", 
+                value=default_val,
+                key=f"{stage_key}_{city}_{i}",
+                min_value=0,
+                label_visibility="collapsed" # 隐藏上方的标签，使用 col 的 st.write 标题
+            )
+            # 使用用户自定义的标签作为字典的键
+            city_reason_data[label] = value
+        reason_data[city] = city_reason_data
+        
+    st.session_state.reasons_data[stage_key] = reason_data
+    
+    # 返回最新数据（虽然已保存到 session state，但为了函数规范）
+    return reason_data
 
-# 未转化原因数据 - 使用折叠器组织
+
 with st.sidebar.expander("🔍 未转化原因数据", expanded=False):
     
     # 1. 无效线索原因
-    st.subheader("❌ 无效线索原因")
-    invalid_data = {}
-    for city in cities:
-        st.write(f"**{city}**")
-        cols = st.columns(2)
-        invalid_data[city] = {
-            '空号错号': cols[0].number_input(f"{city}-空号错号", value=3, key=f"invalid_{city}_1"),
-            '无人接听': cols[1].number_input(f"{city}-无人接听", value=2, key=f"invalid_{city}_2"),
-            '拒绝沟通': cols[0].number_input(f"{city}-拒绝沟通", value=1, key=f"invalid_{city}_3"),
-            '信息错误': cols[1].number_input(f"{city}-信息错误", value=1, key=f"invalid_{city}_4")
-        }
-    st.session_state.reasons_data['invalid'] = invalid_data
+    create_reason_inputs('invalid', "❌ 无效线索原因", reason_count=4)
 
     # 2. 未转化线索原因
-    st.subheader("📞 未转化线索原因")
-    not_converted_data = {}
-    for city in cities:
-        st.write(f"**{city}**")
-        cols = st.columns(2)
-        not_converted_data[city] = {
-            '需求不符': cols[0].number_input(f"{city}-需求不符", value=4, key=f"not_conv_{city}_1"),
-            '预算不足': cols[1].number_input(f"{city}-预算不足", value=3, key=f"not_conv_{city}_2"),
-            '竞品选择': cols[0].number_input(f"{city}-竞品选择", value=2, key=f"not_conv_{city}_3"),
-            '时机不对': cols[1].number_input(f"{city}-时机不对", value=1, key=f"not_conv_{city}_4")
-        }
-    st.session_state.reasons_data['not_converted'] = not_converted_data
+    create_reason_inputs('not_converted', "📞 未转化线索原因", reason_count=4)
 
     # 3. 未转化客户原因
-    st.subheader("👥 未转化客户原因")
-    not_client_data = {}
-    for city in cities:
-        st.write(f"**{city}**")
-        cols = st.columns(2)
-        not_client_data[city] = {
-            '价格问题': cols[0].number_input(f"{city}-价格问题", value=4, key=f"not_client_{city}_1"),
-            '服务担忧': cols[1].number_input(f"{city}-服务担忧", value=2, key=f"not_client_{city}_2"),
-            '方案不符': cols[0].number_input(f"{city}-方案不符", value=2, key=f"not_client_{city}_3"),
-            '跟进中': cols[1].number_input(f"{city}-跟进中", value=1, key=f"not_client_{city}_4")
-        }
-    st.session_state.reasons_data['not_client'] = not_client_data
+    create_reason_inputs('not_client', "👥 未转化客户原因", reason_count=4)
 
     # 4. 未到访原因
-    st.subheader("🚫 未到访原因")
-    not_visit_data = {}
-    for city in cities:
-        st.write(f"**{city}**")
-        cols = st.columns(2)
-        not_visit_data[city] = {
-            '时间冲突': cols[0].number_input(f"{city}-时间冲突", value=2, key=f"not_visit_{city}_1"),
-            '距离太远': cols[1].number_input(f"{city}-距离太远", value=1, key=f"not_visit_{city}_2"),
-            '兴趣减弱': cols[0].number_input(f"{city}-兴趣减弱", value=1, key=f"not_visit_{city}_3"),
-            '其他安排': cols[1].number_input(f"{city}-其他安排", value=0, key=f"not_visit_{city}_4")
-        }
-    st.session_state.reasons_data['not_visit'] = not_visit_data
+    create_reason_inputs('not_visit', "🚫 未到访原因", reason_count=4)
 
     # 5. 未成交原因 - 新增
-    st.subheader("💸 未成交原因")
-    not_deal_data = {}
-    for city in cities:
-        st.write(f"**{city}**")
-        cols = st.columns(2)
-        not_deal_data[city] = {
-            '价格太贵': cols[0].number_input(f"{city}-价格太贵", value=2, key=f"not_deal_{city}_1"),
-            '被竞品抢走': cols[1].number_input(f"{city}-被竞品抢走", value=1, key=f"not_deal_{city}_2"),
-            '资金问题': cols[0].number_input(f"{city}-资金问题", value=1, key=f"not_deal_{city}_3"),
-            '决策延迟': cols[1].number_input(f"{city}-决策延迟", value=0, key=f"not_deal_{city}_4")
-        }
-    st.session_state.reasons_data['not_deal'] = not_deal_data
+    create_reason_inputs('not_deal', "💸 未成交原因", reason_count=4)
 
 # ==================== 漏斗图函数定义 (保持不变) ====================
+# ... (create_beautiful_funnel, create_horizontal_funnel, create_simple_reason_chart, create_pie_chart_for_reason 保持不变)
+
 def create_beautiful_funnel(city_data, city_name, stages):
     """创建美观的漏斗图"""
     values = city_data
@@ -131,10 +148,8 @@ def create_beautiful_funnel(city_data, city_name, stages):
     
     colors = color_schemes.get(city_name, px.colors.sequential.Blues)
     
-    # 根据背景色深浅自动选择文字颜色
     text_colors = []
     for color in colors[:len(values)]:
-        # 简单的亮度计算，选择对比度足够的文字颜色
         if color in ['#FF6B6B', '#FF8E8E', '#4ECDC4', '#45B7D1']:
             text_colors.append("white")
         else:
@@ -179,8 +194,7 @@ def create_horizontal_funnel(city_data, city_name, stages):
     
     horizontal_colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFD700', '#DDA0DD']
     
-    # 确保数据有效
-    valid_values = [v if v > 0 else 0.1 for v in values]  # 避免除零错误
+    valid_values = [v if v > 0 else 0.1 for v in values] 
     
     fig = go.Figure(go.Funnel(
         y=stages,
@@ -279,7 +293,7 @@ def create_pie_chart_for_reason(reason_data, title):
     )
     return fig
 
-# ==================== 交互式文字洞察生成函数 (新增) ====================
+# ==================== 交互式文字洞察生成函数 (保持不变) ====================
 def get_top_reason(reason_data, city, default_message="无明显流失"):
     """获取某个城市某个流失阶段的主要原因及其占比"""
     city_data = reason_data.get(city, {})
@@ -346,6 +360,7 @@ def generate_charts():
     cities_data = st.session_state.cities_data
     reasons_data = st.session_state.reasons_data
 
+    # ... (数据汇总、成本分析、转化漏斗等部分保持不变) ...
     # ==================== 汇总看板表格 + 线索量分布 ====================
     col1, col2 = st.columns([2, 1])
     
@@ -466,7 +481,7 @@ def generate_charts():
             fig_h3 = create_horizontal_funnel(cities_data['江门'], '江门', stages)
             st.plotly_chart(fig_h3, use_container_width=True)
 
-    # ==================== 交互式文字洞察 (新增的重点部分) ====================
+    # ==================== 交互式文字洞察 ====================
     generate_insights(reasons_data)
 
     # ==================== 未转化客户深度分析 - 柱状图 ====================
@@ -541,6 +556,7 @@ def generate_charts():
         fig_not_deal_pie = create_pie_chart_for_reason(reasons_data['not_deal'], "未成交原因")
         st.plotly_chart(fig_not_deal_pie, use_container_width=True)
 
+
 # 显示图表
 generate_charts()
 
@@ -549,9 +565,10 @@ st.sidebar.markdown("---")
 st.sidebar.info("""
 **💡 使用提示：**
 1. 点击展开器修改数据
-2. 数据会自动保存和更新
-3. 使用标签页切换不同视图
-4. 所有图表和洞察都是**交互式**的
+2. **在流失原因设置中，可以自定义标签名称！**
+3. 数据会自动保存和更新
+4. 使用标签页切换不同视图
+5. 所有图表和洞察都是交互式的
 """)
 
 st.sidebar.success("✅ 系统优化完成！")
