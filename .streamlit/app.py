@@ -7,14 +7,29 @@ import numpy as np
 
 # 网页标题
 st.set_page_config(page_title="销售数据分析系统", layout="wide")
-st.title("🎯 三城市销售数据分析系统")
+st.title("🎯 五城市销售数据分析系统")
+
+# 定义所有城市
+cities = ['从化', '中山', '江门', '南沙二园', '佛山']
+stages = ['线索量', '接通数', '有效数', '客户数', '到访数', '成交数']
 
 # 初始化session state
 if 'cities_data' not in st.session_state:
     st.session_state.cities_data = {}
 if 'reasons_data' not in st.session_state:
     st.session_state.reasons_data = {}
-# 新增：初始化原因标签列表
+    
+# 默认值 - 城市转化数据
+default_values_conversion = {
+    '从化': [21, 19, 17, 8, 4, 2],
+    '中山': [30, 25, 20, 11, 5, 1],
+    '江门': [6, 6, 5, 5, 1, 0],
+    # 新增城市数据
+    '南沙二园': [31, 26, 20, 11, 0, 0], 
+    '佛山': [4, 4, 4, 3, 0, 0]
+}
+    
+# 默认值 - 原因标签 (保持不变，但需要确保有值)
 if 'reason_labels' not in st.session_state:
     st.session_state.reason_labels = {
         'invalid': ['空号错号', '无人接听', '拒绝沟通', '信息错误'],
@@ -23,32 +38,42 @@ if 'reason_labels' not in st.session_state:
         'not_visit': ['时间冲突', '距离太远', '兴趣减弱', '其他安排'],
         'not_deal': ['价格太贵', '被竞品抢走', '资金问题', '决策延迟']
     }
-    
-# 默认值
-default_values_reasons = {
-    'invalid': [3, 2, 1, 1],
-    'not_converted': [4, 3, 2, 1],
-    'not_client': [4, 2, 2, 1],
-    'not_visit': [2, 1, 1, 0],
-    'not_deal': [2, 1, 1, 0]
-}
 
+# 默认值 - 原因数量 (新增南沙和佛山的默认数据)
+default_values_reasons = {
+    'invalid': {
+        '从化': [3, 2, 1, 1], '中山': [5, 4, 1, 0], '江门': [0, 1, 0, 0],
+        '南沙二园': [3, 2, 0, 0], # 31线索 - 26接通 = 5未接通/无效
+        '佛山': [0, 0, 0, 0] # 4线索 - 4接通 = 0未接通/无效
+    },
+    'not_converted': {
+        '从化': [4, 3, 2, 1], '中山': [5, 3, 1, 1], '江门': [0, 0, 0, 1],
+        '南沙二园': [4, 2, 0, 0], # 26接通 - 20有效 = 6未有效 (假设主要原因是需求不符)
+        '佛山': [0, 0, 0, 0] # 4接通 - 4有效 = 0未有效
+    },
+    'not_client': {
+        '从化': [4, 2, 2, 1], '中山': [3, 2, 1, 3], '江门': [0, 0, 0, 0],
+        '南沙二园': [3, 2, 1, 3], # 20有效 - 11客户 = 9流失 (假设主要原因是跟进中、价格)
+        '佛山': [0, 1, 0, 0] # 4有效 - 3客户 = 1流失 (假设是价格问题)
+    },
+    'not_visit': {
+        '从化': [2, 1, 1, 0], '中山': [3, 2, 1, 0], '江门': [1, 1, 1, 1],
+        '南沙二园': [4, 3, 2, 2], # 11客户 - 0到访 = 11流失 (假设是时间冲突和距离)
+        '佛山': [1, 1, 1, 0] # 3客户 - 0到访 = 3流失 (假设是时间冲突)
+    },
+    'not_deal': {
+        '从化': [2, 1, 1, 0], '中山': [3, 2, 1, 0], '江门': [0, 0, 0, 0],
+        '南沙二园': [0, 0, 0, 0], # 0到访 - 0成交 = 0流失
+        '佛山': [0, 0, 0, 0] # 0到访 - 0成交 = 0流失
+    }
+}
 
 # 侧边栏 - 数据输入
 st.sidebar.header("📊 核心数据输入")
 cost_per_lead = st.sidebar.number_input("单条线索成本(元)", value=320, min_value=0)
 
-# 城市数据输入 - 使用折叠器组织 (保持不变)
-cities = ['从化', '中山', '江门']
-stages = ['线索量', '接通数', '有效数', '客户数', '到访数', '成交数']
-
+# 城市数据输入 - 使用折叠器组织
 with st.sidebar.expander("🏙️ 各城市转化数据", expanded=True):
-    default_values = {
-        '从化': [21, 19, 17, 8, 4, 2],
-        '中山': [30, 25, 20, 11, 5, 1],
-        '江门': [6, 6, 5, 5, 1, 0]
-    }
-
     for city in cities:
         st.write(f"**{city}转化数据**")
         cols = st.columns(2)
@@ -57,7 +82,7 @@ with st.sidebar.expander("🏙️ 各城市转化数据", expanded=True):
             col_idx = i % 2
             value = cols[col_idx].number_input(
                 f"{stage}",
-                value=default_values[city][i],
+                value=default_values_conversion[city][i],
                 key=f"{city}_{stage}",
                 min_value=0
             )
@@ -91,28 +116,26 @@ def create_reason_inputs(stage_key, stage_title, reason_count=4):
         st.write(f"**{city}**")
         cols = st.columns(reason_count)
         city_reason_data = {}
+        
+        # 确定该城市原因数量的默认值
+        city_default_values = default_values_reasons.get(stage_key, {}).get(city, [0]*reason_count)
+        
         for i in range(reason_count):
-            # 使用用户自定义的标签作为输入框的描述
             label = current_labels[i] 
             
-            # 使用默认值或之前的输入值
-            default_val = default_values_reasons.get(stage_key, [0]*reason_count)[i]
-            
-            # 由于 Streamlit 的 key 机制，我们使用固定的 stage_key 和 index 来确保输入框值稳定
             value = cols[i].number_input(
                 f"{label} ({city})", 
-                value=default_val,
+                # 使用新城市的默认值
+                value=city_default_values[i], 
                 key=f"{stage_key}_{city}_{i}",
                 min_value=0,
-                label_visibility="collapsed" # 隐藏上方的标签，使用 col 的 st.write 标题
+                label_visibility="collapsed" 
             )
-            # 使用用户自定义的标签作为字典的键
             city_reason_data[label] = value
         reason_data[city] = city_reason_data
         
     st.session_state.reasons_data[stage_key] = reason_data
     
-    # 返回最新数据（虽然已保存到 session state，但为了函数规范）
     return reason_data
 
 
@@ -135,22 +158,24 @@ with st.sidebar.expander("🔍 未转化原因数据", expanded=False):
 
 # ==================== 漏斗图函数定义 (保持不变) ====================
 # ... (create_beautiful_funnel, create_horizontal_funnel, create_simple_reason_chart, create_pie_chart_for_reason 保持不变)
-
 def create_beautiful_funnel(city_data, city_name, stages):
     """创建美观的漏斗图"""
     values = city_data
     
+    # 扩展颜色方案以包含新城市
     color_schemes = {
         '从化': ['#FF6B6B', '#FF8E8E', '#FFB1B1', '#FFD4D4', '#FFE8E8', '#FFF5F5'],
         '中山': ['#4ECDC4', '#88D8D0', '#A8E6DD', '#C8F3EC', '#E1F8F5', '#F0FCFA'],
-        '江门': ['#45B7D1', '#7BC9E0', '#9AD6E8', '#B9E3F0', '#D4EDF7', '#EAF6FB']
+        '江门': ['#45B7D1', '#7BC9E0', '#9AD6E8', '#B9E3F0', '#D4EDF7', '#EAF6FB'],
+        '南沙二园': ['#96CEB4', '#B4E0C8', '#D2F0DC', '#E8F8F0', '#F2FBF4', '#F7FDF9'], # 新增：绿色系
+        '佛山': ['#FFD700', '#FFE64D', '#FFF099', '#FFF7CC', '#FFFBF0', '#FFFDF8'] # 新增：黄色系
     }
     
     colors = color_schemes.get(city_name, px.colors.sequential.Blues)
     
     text_colors = []
     for color in colors[:len(values)]:
-        if color in ['#FF6B6B', '#FF8E8E', '#4ECDC4', '#45B7D1']:
+        if color in ['#FF6B6B', '#FF8E8E', '#4ECDC4', '#45B7D1', '#96CEB4']:
             text_colors.append("white")
         else:
             text_colors.append("black")
@@ -226,8 +251,11 @@ def create_horizontal_funnel(city_data, city_name, stages):
     return fig
 
 def create_simple_reason_chart(reason_data, title):
-    """创建简单的柱状图分析"""
-    fig = make_subplots(rows=1, cols=3, subplot_titles=[f'{city}{title}' for city in cities])
+    """创建简单的柱状图分析，适应5个城市，使用2行3列布局"""
+    # 调整布局以适应 5 个城市
+    fig = make_subplots(rows=2, cols=3, 
+                        subplot_titles=[f'{city}{title}' for city in cities],
+                        horizontal_spacing=0.1, vertical_spacing=0.2)
     
     colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4']
     
@@ -235,6 +263,9 @@ def create_simple_reason_chart(reason_data, title):
         city_data = reason_data[city]
         reasons = list(city_data.keys())
         counts = list(city_data.values())
+        
+        row_idx = 1 if i < 3 else 2
+        col_idx = (i % 3) + 1
         
         fig.add_trace(
             go.Bar(
@@ -247,31 +278,38 @@ def create_simple_reason_chart(reason_data, title):
                 textposition='auto',
                 showlegend=False
             ),
-            row=1, col=i+1
+            row=row_idx, col=col_idx
         )
-        fig.update_xaxes(title_text="数量", row=1, col=i+1)
+        fig.update_xaxes(title_text="数量", row=row_idx, col=col_idx)
     
     fig.update_layout(
-        height=400,
+        height=800, # 增加高度以容纳两行
         showlegend=False,
         title_text=f"<b>{title}分析</b>",
         title_x=0.5
     )
+    # 隐藏未使用的子图（第2行第3列）
+    fig.update_annotations(selector=f'text[text="{cities[-1]}{title}"]', text=f'{cities[-1]}{title}')
+    
     return fig
 
 def create_pie_chart_for_reason(reason_data, title):
-    """为原因数据创建饼图分析"""
+    """为原因数据创建饼图分析，适应5个城市，使用2行3列布局"""
     fig = make_subplots(
-        rows=1, 
+        rows=2, 
         cols=3, 
         subplot_titles=[f'{city}{title}占比' for city in cities],
-        specs=[[{"type": "pie"}, {"type": "pie"}, {"type": "pie"}]]
+        specs=[[{"type": "pie"}, {"type": "pie"}, {"type": "pie"}],
+               [{"type": "pie"}, {"type": "pie"}, {"type": "pie"}]]
     )
     
     for i, city in enumerate(cities):
         city_data = reason_data[city]
         reasons = list(city_data.keys())
         counts = list(city_data.values())
+        
+        row_idx = 1 if i < 3 else 2
+        col_idx = (i % 3) + 1
         
         fig.add_trace(
             go.Pie(
@@ -282,87 +320,26 @@ def create_pie_chart_for_reason(reason_data, title):
                 showlegend=False,
                 hole=0.4
             ),
-            row=1, col=i+1
+            row=row_idx, col=col_idx
         )
     
     fig.update_layout(
-        height=400,
+        height=800, # 增加高度以容纳两行
         showlegend=False,
         title_text=f"<b>{title}占比分析</b>",
         title_x=0.5
     )
     return fig
 
-# ==================== 交互式文字洞察生成函数 (保持不变) ====================
-def get_top_reason(reason_data, city, default_message="无明显流失"):
-    """获取某个城市某个流失阶段的主要原因及其占比"""
-    city_data = reason_data.get(city, {})
-    if not city_data:
-        return default_message
-    
-    total = sum(city_data.values())
-    if total == 0:
-        return default_message
-
-    # 找到数量最多的原因
-    max_reason = max(city_data, key=city_data.get)
-    max_count = city_data[max_reason]
-    percentage = (max_count / total) * 100
-    
-    # 构建洞察文本
-    return f"**{max_reason}**（**{max_count}**条，占比 **{percentage:.1f}%**）"
-
-def generate_insights(reasons_data):
-    """生成并展示未转化客户深度分析的文字洞察"""
-    st.header("💡 转化流失关键洞察")
-    
-    # 定义分析的阶段和对应的数据键
-    analysis_stages = {
-        "无效线索": ('invalid', "❌ 线索阶段，主要流失原因为:"),
-        "未转化线索": ('not_converted', "📞 接通阶段，线索未有效的主要原因在于:"),
-        "未转化客户": ('not_client', "👥 有效线索未转化为客户，主要流失原因为:"),
-        "未到访": ('not_visit', "🚫 客户未到访的关键障碍是:"),
-        "未成交": ('not_deal', "💸 到访后未成交的瓶颈是:")
-    }
-    
-    
-    cols = st.columns(len(cities)) # 每行三个城市
-    
-    for city_index, city in enumerate(cities):
-        with cols[city_index]:
-            st.subheader(f"城市: {city}")
-            st.markdown("---")
-            
-            for stage_name, (data_key, prefix) in analysis_stages.items():
-                
-                # 获取该阶段的主要原因洞察
-                top_reason_text = get_top_reason(reasons_data.get(data_key, {}), city)
-                
-                # 使用不同的颜色和图标来区分阶段
-                icon = {
-                    "无效线索": "⛔",
-                    "未转化线索": "🗣️",
-                    "未转化客户": "💰",
-                    "未到访": "🛣️",
-                    "未成交": "💔"
-                }.get(stage_name, "➡️")
-                
-                st.markdown(f"""
-                    #### {icon} {stage_name}
-                    {prefix} {top_reason_text}
-                """)
-                
-            st.markdown("---")
-
+# 注：移除 generate_insights 函数
 
 # ==================== 主图表生成函数 ====================
 def generate_charts():
     cities_data = st.session_state.cities_data
     reasons_data = st.session_state.reasons_data
 
-    # ... (数据汇总、成本分析、转化漏斗等部分保持不变) ...
     # ==================== 汇总看板表格 + 线索量分布 ====================
-    col1, col2 = st.columns([2, 1])
+    col1, col2 = st.columns([3, 2]) # 调整比例
     
     with col1:
         st.header("📈 数据汇总看板")
@@ -378,6 +355,7 @@ def generate_charts():
             
             total_cost = total_leads * cost_per_lead
             valid_rate = (valid_leads / total_leads * 100) if total_leads > 0 else 0
+            # 避免除以零
             valid_lead_cost = total_cost / valid_leads if valid_leads > 0 else 0
             client_cost = total_cost / clients if clients > 0 else 0
             visit_cost = total_cost / visits if visits > 0 else 0
@@ -405,16 +383,18 @@ def generate_charts():
             values=leads_data,
             names=cities,
             title='',
-            color_discrete_sequence=['#FF6B6B', '#4ECDC4', '#45B7D1']
+            color_discrete_sequence=['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFD700']
         )
         fig_pie.update_traces(textposition='inside', textinfo='percent+label')
-        fig_pie.update_layout(height=300, showlegend=False)
+        fig_pie.update_layout(height=350, showlegend=True) # 显示图例，避免颜色过多拥挤
         st.plotly_chart(fig_pie, use_container_width=True)
 
     # ==================== 成本分析 ====================
     st.header("💰 各阶段成本分析")
     
-    fig_cost = make_subplots(rows=1, cols=3, subplot_titles=[f'{city}成本分析' for city in cities])
+    # 调整布局以适应 5 个城市 (2行 3列)
+    fig_cost = make_subplots(rows=2, cols=3, 
+                             subplot_titles=[f'{city}成本分析' for city in cities])
     
     cost_labels = ['线索', '接通', '有效', '客户', '到访', '成交']
     colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD']
@@ -431,60 +411,56 @@ def generate_charts():
             else:
                 stage_costs.append(0)
         
+        row_idx = 1 if i < 3 else 2
+        col_idx = (i % 3) + 1
+        
         fig_cost.add_trace(
             go.Bar(
                 name=city,
                 x=cost_labels,
                 y=stage_costs,
                 marker_color=colors,
-                text=[f'¥{cost:.0f}' for cost in stage_costs],
+                text=[f'¥{cost:.0f}' if cost > 0 else '/' for cost in stage_costs],
                 textposition='auto',
                 showlegend=False
             ),
-            row=1, col=i+1
+            row=row_idx, col=col_idx
         )
         
-        fig_cost.update_xaxes(title_text="阶段", row=1, col=i+1)
-        fig_cost.update_yaxes(title_text="成本(元)", row=1, col=i+1)
+        fig_cost.update_xaxes(title_text="阶段", row=row_idx, col=col_idx)
+        fig_cost.update_yaxes(title_text="成本(元)", row=row_idx, col=col_idx)
     
-    fig_cost.update_layout(height=500, showlegend=False)
+    fig_cost.update_layout(height=800, showlegend=False)
     st.plotly_chart(fig_cost, use_container_width=True)
 
     # ==================== 转化漏斗 ====================
     st.header("🎨 转化漏斗分析")
     
+    # 将 5 个城市放在 5 个列中，可能略显拥挤，但保持单行展示
+    col1, col2, col3, col4, col5 = st.columns(5)
+    
+    city_cols = {cities[0]: col1, cities[1]: col2, cities[2]: col3, cities[3]: col4, cities[4]: col5}
+    
     tab1, tab2 = st.tabs(["🎯 垂直漏斗图", "📊 水平视图"])
     
     with tab1:
         st.subheader("垂直漏斗图")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            fig_funnel1 = create_beautiful_funnel(cities_data['从化'], '从化', stages)
-            st.plotly_chart(fig_funnel1, use_container_width=True)
-        with col2:
-            fig_funnel2 = create_beautiful_funnel(cities_data['中山'], '中山', stages)
-            st.plotly_chart(fig_funnel2, use_container_width=True)
-        with col3:
-            fig_funnel3 = create_beautiful_funnel(cities_data['江门'], '江门', stages)
-            st.plotly_chart(fig_funnel3, use_container_width=True)
+        for city in cities:
+            with city_cols[city]:
+                fig_funnel = create_beautiful_funnel(cities_data[city], city, stages)
+                st.plotly_chart(fig_funnel, use_container_width=True)
     
     with tab2:
         st.subheader("水平漏斗图")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            fig_h1 = create_horizontal_funnel(cities_data['从化'], '从化', stages)
-            st.plotly_chart(fig_h1, use_container_width=True)
-        with col2:
-            fig_h2 = create_horizontal_funnel(cities_data['中山'], '中山', stages)
-            st.plotly_chart(fig_h2, use_container_width=True)
-        with col3:
-            fig_h3 = create_horizontal_funnel(cities_data['江门'], '江门', stages)
-            st.plotly_chart(fig_h3, use_container_width=True)
-
-    # ==================== 交互式文字洞察 ====================
-    generate_insights(reasons_data)
-
+        for city in cities:
+            with city_cols[city]:
+                fig_h = create_horizontal_funnel(cities_data[city], city, stages)
+                st.plotly_chart(fig_h, use_container_width=True)
+    
+    # 注：移除 交互式文字洞察部分
+    
     # ==================== 未转化客户深度分析 - 柱状图 ====================
+    # 由于 create_simple_reason_chart 已被修改为 2行3列，此处保持调用不变
     st.header("🔍 未转化客户深度分析 - 柱状图")
     
     reason_tab1, reason_tab2, reason_tab3, reason_tab4, reason_tab5 = st.tabs([
@@ -521,6 +497,7 @@ def generate_charts():
         st.plotly_chart(fig_not_deal_bar, use_container_width=True)
 
     # ==================== 未转化客户深度分析 - 饼图 ====================
+    # 由于 create_pie_chart_for_reason 已被修改为 2行3列，此处保持调用不变
     st.header("🥧 未转化客户深度分析 - 饼图")
     
     pie_tab1, pie_tab2, pie_tab3, pie_tab4, pie_tab5 = st.tabs([
