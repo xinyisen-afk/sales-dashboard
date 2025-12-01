@@ -19,11 +19,13 @@ if 'cities_data' not in st.session_state:
 if 'reasons_data' not in st.session_state:
     st.session_state.reasons_data = {}
     
-# 默认值 - 城市转化数据
+# =======================================================
+# 请在这里更新您的【标准转化数据】
+# =======================================================
 default_values_conversion = {
     '从化': [21, 19, 17, 8, 4, 2],
     '中山': [30, 25, 20, 11, 5, 1],
-    '江门': [6, 6, 5, 5, 1, 0],
+    '江门': [6, 6, 5, 5, 1, 0], 
     '南沙二园': [31, 26, 20, 11, 0, 0], 
     '佛山': [4, 4, 4, 3, 0, 0]
 }
@@ -38,7 +40,7 @@ if 'reason_labels' not in st.session_state:
         'not_deal': ['价格太贵', '被竞品抢走', '资金问题', '决策延迟']
     }
 
-# 默认值 - 原因数量 (包含新城市数据)
+# 请根据需要更新这里的【标准流失原因数据】
 default_values_reasons = {
     'invalid': {
         '从化': [3, 2, 1, 1], '中山': [5, 4, 1, 0], '江门': [0, 1, 0, 0],
@@ -116,7 +118,6 @@ def create_reason_inputs(stage_key, stage_title, reason_count=4):
         cols = st.columns(reason_count)
         city_reason_data = {}
         
-        # 确定该城市原因数量的默认值
         city_default_values = default_values_reasons.get(stage_key, {}).get(city, [0]*reason_count)
         
         for i in range(reason_count):
@@ -162,7 +163,7 @@ def create_beautiful_funnel(city_data, city_name, stages):
     
     text_colors = []
     for color in colors[:len(values)]:
-        if color in ['#FF6B6B', '#FF8E8E', '#4ECDC4', '#45B7D1', '#96CEB4']:
+        if color in ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4']:
             text_colors.append("white")
         else:
             text_colors.append("black")
@@ -336,7 +337,7 @@ def generate_charts():
             
             total_cost = total_leads * cost_per_lead
             valid_rate = (valid_leads / total_leads * 100) if total_leads > 0 else 0
-            # 避免除以零
+            
             valid_lead_cost = total_cost / valid_leads if valid_leads > 0 else 0
             client_cost = total_cost / clients if clients > 0 else 0
             visit_cost = total_cost / visits if visits > 0 else 0
@@ -355,6 +356,17 @@ def generate_charts():
         
         summary_df = pd.DataFrame(summary_data)
         st.dataframe(summary_df, use_container_width=True)
+        
+        # === 1. 新增代码：下载按钮 ===
+        csv_export = summary_df.to_csv(index=False, encoding='utf-8-sig')
+        
+        st.download_button(
+            label="⬇️ 下载汇总看板数据 (CSV)",
+            data=csv_export,
+            file_name='销售数据汇总看板.csv',
+            mime='text/csv',
+        )
+        # =============================
     
     with col2:
         st.header("🔢 线索量分布")
@@ -373,7 +385,6 @@ def generate_charts():
     # ==================== 成本分析 ====================
     st.header("💰 各阶段成本分析")
     
-    # 调整布局以适应 5 个城市 (2行 3列)
     fig_cost = make_subplots(rows=2, cols=3, 
                              subplot_titles=[f'{city}成本分析' for city in cities])
     
@@ -434,10 +445,10 @@ def generate_charts():
                 st.plotly_chart(fig_funnel, use_container_width=True)
                 
         # 2. 绘制第二行 (2个城市)
-        col_row2_1, col_row2_2, _ = st.columns([1, 1, 1]) # 创建 3 列，只用前 2 列
+        col_row2_1, col_row2_2, _ = st.columns([1, 1, 1]) 
         cols_row2 = [col_row2_1, col_row2_2]
         for i in range(2):
-            city = cities[i + 3] # 南沙二园 (index 3), 佛山 (index 4)
+            city = cities[i + 3]
             with cols_row2[i]:
                 fig_funnel = create_beautiful_funnel(cities_data[city], city, stages)
                 st.plotly_chart(fig_funnel, use_container_width=True)
@@ -465,8 +476,6 @@ def generate_charts():
                 fig_h = create_horizontal_funnel(cities_data[city], city, stages)
                 st.plotly_chart(fig_h, use_container_width=True)
     
-    # === 移除转化流失关键洞察部分 ===
-
     # ==================== 未转化客户深度分析 - 柱状图 ====================
     st.header("🔍 未转化客户深度分析 - 柱状图")
     
@@ -503,15 +512,15 @@ def generate_charts():
         fig_not_deal_bar = create_simple_reason_chart(reasons_data['not_deal'], "未成交原因")
         st.plotly_chart(fig_not_deal_bar, use_container_width=True)
 
-    # ==================== 未转化客户深度分析 - 饼图 ====================
+    # ==================== 未转化客户深度分析 - 饼图 (修复 Tab 标题) ====================
     st.header("🥧 未转化客户深度分析 - 饼图")
     
     pie_tab1, pie_tab2, pie_tab3, pie_tab4, pie_tab5 = st.tabs([
-        "❌ 无效线索占比",
-        "📞 未转化线索占比",
-        "👥 未转化客户占比",
-        "🚫 未到访占比",
-        "💸 未成交占比"
+        "❌ 无效线索**原因分布**",
+        "📞 未转化线索**原因分布**",
+        "👥 未转化客户**原因分布**",
+        "🚫 未到访**原因分布**",
+        "💸 未成交**原因分布**"
     ])
     
     with pie_tab1:
@@ -554,4 +563,4 @@ st.sidebar.info("""
 5. 所有图表和洞察都是交互式的
 """)
 
-st.sidebar.success("✅ 系统优化完成！")
+st.sidebar.success("✅ 系统已修复并优化，新增 CSV 导出功能！")
