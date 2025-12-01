@@ -15,15 +15,16 @@ if 'cities_data' not in st.session_state:
 if 'reasons_data' not in st.session_state:
     st.session_state.reasons_data = {}
 
+# 定义全局变量
+cities = ['从化', '中山', '江门']
+stages = ['线索总量', '接通数', '有效线索', '意向客户', '到访客户', '成交客户']
+
 # 侧边栏 - 数据输入
 st.sidebar.header("📊 核心数据输入")
 cost_per_lead = st.sidebar.number_input("单条线索成本(元)", value=320, min_value=0)
 
 # 城市数据输入 - 使用折叠器组织
 with st.sidebar.expander("🏙️ 各城市转化数据", expanded=True):
-    cities = ['从化', '中山', '江门']
-    stages = ['线索总量', '接通数', '有效线索', '意向客户', '到访客户', '成交客户']
-
     default_values = {
         '从化': [21, 19, 17, 8, 4, 2],
         '中山': [30, 25, 20, 11, 5, 1], 
@@ -117,6 +118,99 @@ with st.sidebar.expander("🔍 未转化原因数据", expanded=False):
             '硬性条件不符': cols[1].number_input(f"{city}-硬性条件不符", value=0, key=f"not_deal_{city}_4", min_value=0)
         }
     st.session_state.reasons_data['not_deal'] = not_deal_data
+
+# ==================== 漏斗图函数定义 ====================
+def create_beautiful_funnel(city_data, city_name, stages):
+    """创建美观的漏斗图"""
+    values = city_data
+    
+    color_schemes = {
+        '从化': ['#FF6B6B', '#FF8E8E', '#FFB1B1', '#FFD4D4', '#FFE8E8', '#FFF5F5'],
+        '中山': ['#4ECDC4', '#88D8D0', '#A8E6DD', '#C8F3EC', '#E1F8F5', '#F0FCFA'],
+        '江门': ['#45B7D1', '#7BC9E0', '#9AD6E8', '#B9E3F0', '#D4EDF7', '#EAF6FB']
+    }
+    
+    colors = color_schemes.get(city_name, px.colors.sequential.Blues)
+    
+    # 根据背景色深浅自动选择文字颜色
+    text_colors = []
+    for color in colors[:len(values)]:
+        # 简单的亮度计算，选择对比度足够的文字颜色
+        if color in ['#FF6B6B', '#FF8E8E', '#4ECDC4', '#45B7D1']:
+            text_colors.append("white")
+        else:
+            text_colors.append("black")
+    
+    fig = go.Figure(go.Funnel(
+        y=stages,
+        x=values,
+        textposition="inside",
+        textinfo="value+percent initial",
+        textfont=dict(size=12, color=text_colors, weight="bold"),
+        marker=dict(
+            color=colors[:len(values)],
+            line=dict(width=2, color="darkgray")
+        ),
+        connector=dict(
+            line=dict(color="rgba(128,128,128,0.5)", width=2, dash="dot")
+        ),
+        opacity=0.85
+    ))
+    
+    fig.update_layout(
+        title={
+            'text': f"<b>{city_name}转化漏斗</b>",
+            'x': 0.5,
+            'xanchor': 'center',
+            'font': {'size': 16, 'color': '#2C3E50'}
+        },
+        plot_bgcolor='rgba(248,248,248,0.8)',
+        paper_bgcolor='white',
+        font=dict(size=11),
+        height=450,
+        margin=dict(t=60, b=40, l=60, r=40),
+        showlegend=False
+    )
+    
+    return fig
+
+def create_horizontal_funnel(city_data, city_name, stages):
+    """创建水平漏斗图"""
+    values = city_data
+    
+    horizontal_colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFD700', '#DDA0DD']
+    
+    # 确保数据有效
+    valid_values = [v if v > 0 else 0.1 for v in values]  # 避免除零错误
+    
+    fig = go.Figure(go.Funnel(
+        y=stages,
+        x=valid_values,
+        orientation="h",
+        textposition="inside",
+        textinfo="value+percent initial",
+        textfont=dict(size=11, color="white", weight="bold"),
+        marker=dict(
+            color=horizontal_colors[:len(values)],
+            line=dict(width=2, color="white")
+        ),
+        opacity=0.9
+    ))
+    
+    fig.update_layout(
+        title={
+            'text': f"<b>{city_name}水平视图</b>",
+            'x': 0.5,
+            'xanchor': 'center',
+            'font': {'size': 14, 'color': '#2C3E50'}
+        },
+        plot_bgcolor='rgba(248,248,248,0.8)',
+        paper_bgcolor='white',
+        height=400,
+        margin=dict(t=50, b=40, l=80, r=40)
+    )
+    
+    return fig
 
 # ==================== 新增分析函数 ====================
 def create_loss_analysis_chart():
@@ -351,99 +445,6 @@ def create_stage_analysis_tabs():
                     percentage = (main_count / total_counts[city]) * 100
                     
                     st.info(f"**{city}**：最主要原因为 **{main_reason}**，占比 **{percentage:.1f}%** ({main_count}/{total_counts[city]})")
-
-# ==================== 原有的漏斗图函数 ====================
-def create_beautiful_funnel(city_data, city_name, stages):
-    """创建美观的漏斗图"""
-    values = city_data
-    
-    color_schemes = {
-        '从化': ['#FF6B6B', '#FF8E8E', '#FFB1B1', '#FFD4D4', '#FFE8E8', '#FFF5F5'],
-        '中山': ['#4ECDC4', '#88D8D0', '#A8E6DD', '#C8F3EC', '#E1F8F5', '#F0FCFA'],
-        '江门': ['#45B7D1', '#7BC9E0', '#9AD6E8', '#B9E3F0', '#D4EDF7', '#EAF6FB']
-    }
-    
-    colors = color_schemes.get(city_name, px.colors.sequential.Blues)
-    
-    # 根据背景色深浅自动选择文字颜色
-    text_colors = []
-    for color in colors[:len(values)]:
-        # 简单的亮度计算，选择对比度足够的文字颜色
-        if color in ['#FF6B6B', '#FF8E8E', '#4ECDC4', '#45B7D1']:
-            text_colors.append("white")
-        else:
-            text_colors.append("black")
-    
-    fig = go.Figure(go.Funnel(
-        y=stages,
-        x=values,
-        textposition="inside",
-        textinfo="value+percent initial",
-        textfont=dict(size=12, color=text_colors, weight="bold"),
-        marker=dict(
-            color=colors[:len(values)],
-            line=dict(width=2, color="darkgray")
-        ),
-        connector=dict(
-            line=dict(color="rgba(128,128,128,0.5)", width=2, dash="dot")
-        ),
-        opacity=0.85
-    ))
-    
-    fig.update_layout(
-        title={
-            'text': f"<b>{city_name}转化漏斗</b>",
-            'x': 0.5,
-            'xanchor': 'center',
-            'font': {'size': 16, 'color': '#2C3E50'}
-        },
-        plot_bgcolor='rgba(248,248,248,0.8)',
-        paper_bgcolor='white',
-        font=dict(size=11),
-        height=450,
-        margin=dict(t=60, b=40, l=60, r=40),
-        showlegend=False
-    )
-    
-    return fig
-
-def create_horizontal_funnel(city_data, city_name, stages):
-    """创建水平漏斗图"""
-    values = city_data
-    
-    horizontal_colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFD700', '#DDA0DD']
-    
-    # 确保数据有效
-    valid_values = [v if v > 0 else 0.1 for v in values]  # 避免除零错误
-    
-    fig = go.Figure(go.Funnel(
-        y=stages,
-        x=valid_values,
-        orientation="h",
-        textposition="inside",
-        textinfo="value+percent initial",
-        textfont=dict(size=11, color="white", weight="bold"),
-        marker=dict(
-            color=horizontal_colors[:len(values)],
-            line=dict(width=2, color="white")
-        ),
-        opacity=0.9
-    ))
-    
-    fig.update_layout(
-        title={
-            'text': f"<b>{city_name}水平视图</b>",
-            'x': 0.5,
-            'xanchor': 'center',
-            'font': {'size': 14, 'color': '#2C3E50'}
-        },
-        plot_bgcolor='rgba(248,248,248,0.8)',
-        paper_bgcolor='white',
-        height=400,
-        margin=dict(t=50, b=40, l=80, r=40)
-    )
-    
-    return fig
 
 # ==================== 主图表生成函数 ====================
 def generate_charts():
