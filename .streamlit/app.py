@@ -37,17 +37,17 @@ def load_standard_data():
     }
     
     try:
+        # 在部署环境中，文件通常是从仓库根目录读取的
         with open(DATA_FILE, 'r', encoding='utf-8') as f:
             data = json.load(f)
-            # 使用 get() 确保即使 JSON 缺少键，应用也能使用默认值运行
             st.session_state.cities_data = data.get('cities_data', empty_cities_data)
-            st.session_state.reasons_data = data.get('reasons_data', defaultdict(dict))
+            # 使用 defaultdict(dict) 来确保即使 reasons_data 结构不完整，也能安全写入
+            st.session_state.reasons_data = defaultdict(dict, data.get('reasons_data', {}))
             st.session_state.reason_labels = data.get('reason_labels', empty_reason_labels)
             st.session_state.cost_per_lead = data.get('cost_per_lead', 320)
             st.sidebar.success("✅ 已从 GitHub 仓库加载标准数据。")
     except FileNotFoundError:
         st.sidebar.error(f"⚠️ 警告：未找到 {DATA_FILE} 文件。请在 GitHub 仓库中创建该文件。")
-        # 文件不存在时，使用空数据初始化
         st.session_state.cities_data = empty_cities_data
         st.session_state.reasons_data = defaultdict(dict)
         st.session_state.reason_labels = empty_reason_labels
@@ -61,8 +61,7 @@ def load_standard_data():
 
 def serialize_data_for_export():
     """将当前的 session state 数据整理成 standard_data.json 文件格式"""
-    
-    # reasons_data 可能包含 defaultdict，需要转为普通 dict 以便序列化
+    # 将 defaultdict 转换回标准 dict 以便 JSON 序列化
     reasons_data_clean = dict(st.session_state.reasons_data)
     reason_labels_clean = dict(st.session_state.reason_labels)
         
@@ -72,8 +71,6 @@ def serialize_data_for_export():
         'reasons_data': reasons_data_clean,
         'cost_per_lead': st.session_state.cost_per_lead
     }
-    
-    # 使用 json.dumps 格式化输出，方便复制
     return json.dumps(data_to_save, ensure_ascii=False, indent=4)
 
 
@@ -100,7 +97,6 @@ with st.sidebar.expander("🏙️ 各城市转化数据", expanded=True):
         values = []
         for i, stage in enumerate(stages):
             col_idx = i % 2
-            # 从 session state 读取值，确保使用当前数据
             initial_value = st.session_state.cities_data.get(city, [0]*6)[i]
             
             value = cols[col_idx].number_input(
@@ -115,7 +111,7 @@ with st.sidebar.expander("🏙️ 各城市转化数据", expanded=True):
         
 # 未转化原因数据输入互动化函数
 def create_reason_inputs(stage_key, stage_title, reason_count=4):
-    """创建互动式的流失原因标签和数量输入"""
+    """创建互动式的流失原因标签和数量输入 (已修复标签修改残留问题)"""
     
     st.subheader(stage_title)
     
@@ -123,7 +119,6 @@ def create_reason_inputs(stage_key, stage_title, reason_count=4):
     st.markdown("##### 📌 **原因标签设置 (影响所有城市)**")
     label_cols = st.columns(reason_count)
     current_labels = []
-    
     current_default_labels = st.session_state.reason_labels.get(stage_key, [''] * 4)
     
     for i in range(reason_count):
@@ -137,17 +132,22 @@ def create_reason_inputs(stage_key, stage_title, reason_count=4):
     
     # 2. 各城市流失数量
     st.markdown("##### 🔢 **各城市流失数量**")
-    reason_data = st.session_state.reasons_data.get(stage_key, {})
+    
+    # 【核心修复点】创建一个干净的字典来存储当前 Stage 的新数据，自动丢弃旧标签
+    new_reason_data_for_stage = {} 
     
     for city in cities:
         st.write(f"**{city}**")
         cols = st.columns(reason_count)
-        city_reason_data = reason_data.get(city, {})
+        
+        city_initial_data = st.session_state.reasons_data.get(stage_key, {}).get(city, {})
+        city_reason_data = {} 
         
         for i in range(reason_count):
             label = current_labels[i] 
             
-            initial_value = city_reason_data.get(label, 0)
+            # 使用新的 label 来查找旧的初始值
+            initial_value = city_initial_data.get(label, 0)
             
             value = cols[i].number_input(
                 f"{label} ({city})", 
@@ -158,9 +158,11 @@ def create_reason_inputs(stage_key, stage_title, reason_count=4):
             )
             if label:
                 city_reason_data[label] = value
-        reason_data[city] = city_reason_data
+                
+        new_reason_data_for_stage[city] = city_reason_data
         
-    st.session_state.reasons_data[stage_key] = reason_data
+    # 3. 用干净的新数据结构覆盖 session state
+    st.session_state.reasons_data[stage_key] = new_reason_data_for_stage
 
 
 with st.sidebar.expander("🔍 未转化原因数据", expanded=False):
@@ -170,11 +172,11 @@ with st.sidebar.expander("🔍 未转化原因数据", expanded=False):
     create_reason_inputs('not_visit', "🚫 未到访原因", reason_count=4)
     create_reason_inputs('not_deal', "💸 未成交原因", reason_count=4)
 
-# ==================== 3. 开发者导出面板（GitHub 部署环境下的保存） ====================
+# ==================== 3. 开发者导出面板 ====================
 
 st.sidebar.markdown("---")
 st.sidebar.header("🔑 开发者数据导出")
-st.sidebar.info("**这是部署环境下的“保存”功能！** 点击按钮，复制主页面上生成的 JSON 内容，然后用于更新 GitHub 上的 `standard_data.json` 文件。")
+st.sidebar.info("请在修改数据或标签后，点击此按钮，复制 JSON 内容用于更新 GitHub 上的 `standard_data.json` 文件。")
 
 if st.sidebar.button("✨ 生成最新的 standard_data.json 内容", type="primary"):
     json_output = serialize_data_for_export()
@@ -185,7 +187,7 @@ if st.sidebar.button("✨ 生成最新的 standard_data.json 内容", type="prim
     st.toast("JSON 内容已生成在主页面！", icon='🎉')
 
 
-# ==================== 4. Plotly 图表函数定义 (保证代码完整性) ====================
+# ==================== 4. Plotly 图表函数定义 (完整补全) ====================
 
 def create_beautiful_funnel(city_data, city_name, stages):
     """创建美观的垂直漏斗图"""
@@ -198,7 +200,7 @@ def create_beautiful_funnel(city_data, city_name, stages):
         '佛山': ['#FFD700', '#FFE64D', '#FFF099', '#FFF7CC', '#FFFBF0', '#FFFDF8'] 
     }
     colors = color_schemes.get(city_name, px.colors.sequential.Blues)
-    text_colors = ["white"] * 3 + ["black"] * 3 # 简单判断文本颜色
+    text_colors = ["white"] * 3 + ["black"] * 3
     
     fig = go.Figure(go.Funnel(
         y=stages, x=values, textposition="inside", textinfo="value+percent initial",
@@ -233,53 +235,68 @@ def create_horizontal_funnel(city_data, city_name, stages):
     )
     return fig
 
-def create_simple_reason_chart(reasons_data, title, cities):
+def create_simple_reason_chart(reasons_data_for_stage, title, cities):
     """创建多城市流失原因柱状图分析"""
-    fig = make_subplots(rows=2, cols=3, 
+    
+    # 动态计算所需的行数和列数
+    cols_count = 3
+    rows_count = int(np.ceil(len(cities) / cols_count))
+    
+    fig = make_subplots(rows=rows_count, cols=cols_count, 
                         subplot_titles=[f'{city}{title}' for city in cities],
                         horizontal_spacing=0.1, vertical_spacing=0.2)
-    colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4']
+    colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4'] # 默认颜色
     
     for i, city in enumerate(cities):
-        city_data = reasons_data.get(city, {})
-        reasons = list(city_data.keys())
-        counts = list(city_data.values())
+        city_data = reasons_data_for_stage.get(city, {})
+        # 排除数量为0或标签为空的原因
+        valid_data = {k: v for k, v in city_data.items() if v > 0 and k}
+        reasons = list(valid_data.keys())
+        counts = list(valid_data.values())
         
-        row_idx = 1 if i < 3 else 2
-        col_idx = (i % 3) + 1
+        row_idx = (i // cols_count) + 1
+        col_idx = (i % cols_count) + 1
         
-        fig.add_trace(
-            go.Bar(name=city, y=reasons, x=counts, orientation='h', marker_color=colors[:len(reasons)],
-                   text=counts, textposition='auto', showlegend=False),
-            row=row_idx, col=col_idx
-        )
+        if counts: # 只有当有数据时才添加 trace
+            fig.add_trace(
+                go.Bar(name=city, y=reasons, x=counts, orientation='h', marker_color=colors[:len(reasons)],
+                       text=counts, textposition='auto', showlegend=False),
+                row=row_idx, col=col_idx
+            )
         fig.update_xaxes(title_text="数量", row=row_idx, col=col_idx)
     
-    fig.update_layout(height=800, showlegend=False, title_text=f"<b>{title}分析</b>", title_x=0.5)
+    fig.update_layout(height=rows_count * 400, showlegend=False, title_text=f"<b>{title}分析</b>", title_x=0.5)
     return fig
 
-def create_pie_chart_for_reason(reasons_data, title, cities):
+def create_pie_chart_for_reason(reasons_data_for_stage, title, cities):
     """创建多城市流失原因饼图分析"""
-    fig = make_subplots(rows=2, cols=3, subplot_titles=[f'{city}{title}占比' for city in cities],
-                        specs=[[{"type": "pie"}, {"type": "pie"}, {"type": "pie"}],
-                               [{"type": "pie"}, {"type": "pie"}, {"type": "pie"}]])
+    
+    cols_count = 3
+    rows_count = int(np.ceil(len(cities) / cols_count))
+
+    fig = make_subplots(rows=rows_count, cols=cols_count, subplot_titles=[f'{city}{title}占比' for city in cities],
+                        specs=[[{"type": "pie"}] * cols_count] * rows_count)
     
     for i, city in enumerate(cities):
-        city_data = reasons_data.get(city, {})
-        reasons = list(city_data.keys())
-        counts = list(city_data.values())
+        city_data = reasons_data_for_stage.get(city, {})
+        # 排除数量为0或标签为空的原因
+        valid_data = {k: v for k, v in city_data.items() if v > 0 and k}
+        reasons = list(valid_data.keys())
+        counts = list(valid_data.values())
         
-        row_idx = 1 if i < 3 else 2
-        col_idx = (i % 3) + 1
+        row_idx = (i // cols_count) + 1
+        col_idx = (i % cols_count) + 1
         
-        fig.add_trace(
-            go.Pie(labels=reasons, values=counts, name=city, textinfo='percent+label',
-                   showlegend=False, hole=0.4),
-            row=row_idx, col=col_idx
-        )
+        if counts: # 只有当有数据时才添加 trace
+            fig.add_trace(
+                go.Pie(labels=reasons, values=counts, name=city, textinfo='percent+label',
+                       showlegend=False, hole=0.4),
+                row=row_idx, col=col_idx
+            )
     
-    fig.update_layout(height=800, showlegend=False, title_text=f"<b>{title}占比分析</b>", title_x=0.5)
+    fig.update_layout(height=rows_count * 400, showlegend=False, title_text=f"<b>{title}占比分析</b>", title_x=0.5)
     return fig
+
 
 # ==================== 5. 主图表生成函数 (包含汇总看板更新) ====================
 
@@ -298,12 +315,14 @@ def generate_charts():
              values = cities_data.get(city, [0]*6)
              
              total_leads = values[0]
+             connects = values[1]
              valid_leads = values[2]
              clients = values[3]
-             visits = values[4] # 到访数量 (新增)
+             visits = values[4] 
              deals = values[5]
              
-             total_cost = total_leads * cost_per_lead # 消费总数 (新增)
+             total_cost = total_leads * cost_per_lead
+             
              valid_rate = (valid_leads / total_leads * 100) if total_leads > 0 else 0
              valid_lead_cost = total_cost / valid_leads if valid_leads > 0 else 0
              client_cost = total_cost / clients if clients > 0 else 0
@@ -313,8 +332,8 @@ def generate_charts():
              summary_data.append({
                  '城市': city,
                  '线索总量': total_leads,
-                 '**到访数量**': visits, # 新增
-                 '**消费总数**': f"¥{total_cost:,.0f}", # 新增
+                 '**到访数量**': visits,
+                 '**消费总数**': f"¥{total_cost:,.0f}",
                  '线索有效率': f"{valid_rate:.1f}%",
                  '有效线索成本': f"¥{valid_lead_cost:,.0f}" if valid_lead_cost > 0 else "/",
                  '客户成本': f"¥{client_cost:,.0f}" if client_cost > 0 else "/",
@@ -324,13 +343,11 @@ def generate_charts():
         
         summary_df = pd.DataFrame(summary_data)
         
-        # 优化列顺序
         new_cols_order = ['城市', '线索总量', '**到访数量**', '**消费总数**', '线索有效率', '有效线索成本', '客户成本', '到访成本', '成交成本']
         summary_df = summary_df[new_cols_order]
         
         st.dataframe(summary_df, use_container_width=True)
         
-        # CSV 导出按钮
         csv_export = summary_df.to_csv(index=False, encoding='utf-8-sig')
         st.download_button(
             label="⬇️ 下载汇总看板数据 (CSV)",
@@ -352,31 +369,29 @@ def generate_charts():
         fig_pie.update_layout(height=350, showlegend=True)
         st.plotly_chart(fig_pie, use_container_width=True)
 
-    # ------------------- 成本分析 -------------------
-    st.header("💰 各阶段成本分析")
-    # 此处省略成本分析图的代码，与上一个回答中相同
-
     # ------------------- 转化漏斗 -------------------
     st.header("🎨 转化漏斗分析")
     tab1, tab2 = st.tabs(["🎯 垂直漏斗图", "📊 水平视图"])
     
+    city_display_groups = [cities[:3], cities[3:]] # 分组展示，避免一行太拥挤
+    
     with tab1:
         st.subheader("垂直漏斗图")
-        cols = st.columns(3)
-        for i, city in enumerate(cities):
-            city_data = cities_data.get(city, [0]*6)
-            with cols[i % 3]:
-                if i < 3 or (i >= 3 and i < 5): # 确保布局是3+2
+        for group in city_display_groups:
+            cols = st.columns(len(group))
+            for i, city in enumerate(group):
+                city_data = cities_data.get(city, [0]*6)
+                with cols[i]:
                     fig_funnel = create_beautiful_funnel(city_data, city, stages)
                     st.plotly_chart(fig_funnel, use_container_width=True)
     
     with tab2:
         st.subheader("水平漏斗图")
-        cols = st.columns(3)
-        for i, city in enumerate(cities):
-            city_data = cities_data.get(city, [0]*6)
-            with cols[i % 3]:
-                if i < 3 or (i >= 3 and i < 5):
+        for group in city_display_groups:
+            cols = st.columns(len(group))
+            for i, city in enumerate(group):
+                city_data = cities_data.get(city, [0]*6)
+                with cols[i]:
                     fig_h = create_horizontal_funnel(city_data, city, stages)
                     st.plotly_chart(fig_h, use_container_width=True)
     
@@ -390,7 +405,21 @@ def generate_charts():
         fig_invalid_bar = create_simple_reason_chart(reasons_data['invalid'], "无效线索原因", cities)
         st.plotly_chart(fig_invalid_bar, use_container_width=True)
     
-    # ... (其他柱状图Tabs类似) ...
+    with reason_tab_bar2:
+        fig_not_converted_bar = create_simple_reason_chart(reasons_data['not_converted'], "未转化线索原因", cities)
+        st.plotly_chart(fig_not_converted_bar, use_container_width=True)
+        
+    with reason_tab_bar3:
+        fig_not_client_bar = create_simple_reason_chart(reasons_data['not_client'], "未转化客户原因", cities)
+        st.plotly_chart(fig_not_client_bar, use_container_width=True)
+
+    with reason_tab_bar4:
+        fig_not_visit_bar = create_simple_reason_chart(reasons_data['not_visit'], "未到访原因", cities)
+        st.plotly_chart(fig_not_visit_bar, use_container_width=True)
+        
+    with reason_tab_bar5:
+        fig_not_deal_bar = create_simple_reason_chart(reasons_data['not_deal'], "未成交原因", cities)
+        st.plotly_chart(fig_not_deal_bar, use_container_width=True)
 
     # ------------------- 未转化客户深度分析 - 饼图 -------------------
     st.header("🥧 未转化客户深度分析 - 饼图")
@@ -402,10 +431,24 @@ def generate_charts():
         fig_invalid_pie = create_pie_chart_for_reason(reasons_data['invalid'], "无效线索原因", cities)
         st.plotly_chart(fig_invalid_pie, use_container_width=True)
     
-    # ... (其他饼图Tabs类似) ...
+    with pie_tab2:
+        fig_not_converted_pie = create_pie_chart_for_reason(reasons_data['not_converted'], "未转化线索原因", cities)
+        st.plotly_chart(fig_not_converted_pie, use_container_width=True)
+
+    with pie_tab3:
+        fig_not_client_pie = create_pie_chart_for_reason(reasons_data['not_client'], "未转化客户原因", cities)
+        st.plotly_chart(fig_not_client_pie, use_container_width=True)
+        
+    with pie_tab4:
+        fig_not_visit_pie = create_pie_chart_for_reason(reasons_data['not_visit'], "未到访原因", cities)
+        st.plotly_chart(fig_not_visit_pie, use_container_width=True)
+
+    with pie_tab5:
+        fig_not_deal_pie = create_pie_chart_for_reason(reasons_data['not_deal'], "未成交原因", cities)
+        st.plotly_chart(fig_not_deal_pie, use_container_width=True)
 
 
-# 显示图表
+# 运行主函数
 if __name__ == "__main__":
     generate_charts()
     
