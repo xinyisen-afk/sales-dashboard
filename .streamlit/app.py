@@ -10,104 +10,67 @@ import numpy as np
 
 # 网页标题和配置
 st.set_page_config(page_title="本月销售数据分析系统", layout="wide")
-st.title("🎯 本月五城市销售数据分析系统") # 修正点 1: 修改主标题
+st.title("🎯 本月五城市销售数据分析系统")
 
-# 定义数据文件路径（从 GitHub 仓库读取）
+# 定义数据文件路径
 DATA_FILE = 'standard_data.json'
-
-# 定义所有城市和阶段
 cities = ['从化', '中山', '江门', '南沙二园', '佛山']
 stages = ['线索量', '接通数', '有效数', '客户数', '到访数', '成交数']
 
 # =======================================================
-# 1. 数据加载与序列化函数
+# 1. 数据加载与序列化函数 (更新以支持多月份结构)
 # =======================================================
 
-def load_standard_data():
-    """尝试从 standard_data.json 文件加载数据，如果失败则使用空默认值。"""
-    
-    empty_cities_data = {city: [0]*6 for city in cities}
-    empty_reason_labels = {
+# 默认空数据结构
+EMPTY_DATA_STRUCTURE = {
+    'cities_data': {city: [0]*6 for city in cities},
+    'reason_labels': {
         'invalid': ['空号错号', '无人接听', '拒绝沟通', '信息错误'],
         'not_converted': ['需求不符', '预算不足', '竞品选择', '时机不对'],
         'not_client': ['价格问题', '服务担忧', '方案不符', '跟进中'],
         'not_visit': ['时间冲突', '距离太远', '兴趣减弱', '其他安排'],
         'not_deal': ['价格太贵', '被竞品抢走', '资金问题', '决策延迟']
-    }
+    },
+    'reasons_data': defaultdict(dict),
+    'cost_per_lead': 320
+}
+
+def load_standard_data():
+    """尝试加载多月份数据，并设置默认 session state"""
     
     try:
         with open(DATA_FILE, 'r', encoding='utf-8') as f:
             data = json.load(f)
-            st.session_state.cities_data = data.get('cities_data', empty_cities_data)
-            st.session_state.reasons_data = defaultdict(dict, data.get('reasons_data', {}))
-            st.session_state.reason_labels = data.get('reason_labels', empty_reason_labels)
-            st.session_state.cost_per_lead = data.get('cost_per_lead', 320)
-            st.sidebar.success("✅ 已从 GitHub 仓库加载标准数据。")
+            st.session_state.all_months_data = data
+            st.sidebar.success("✅ 已加载多月份标准数据。")
     except FileNotFoundError:
-        st.sidebar.error(f"⚠️ 警告：未找到 {DATA_FILE} 文件。请在 GitHub 仓库中创建该文件。")
-        st.session_state.cities_data = empty_cities_data
-        st.session_state.reasons_data = defaultdict(dict)
-        st.session_state.reason_labels = empty_reason_labels
-        st.session_state.cost_per_lead = 320
+        st.sidebar.error(f"⚠️ 警告：未找到 {DATA_FILE} 文件。创建默认结构。")
+        st.session_state.all_months_data = {"October": EMPTY_DATA_STRUCTURE}
     except json.JSONDecodeError:
-        st.sidebar.error(f"⚠️ 警告：{DATA_FILE} 文件格式错误，请检查 JSON 内容。")
-        st.session_state.cities_data = empty_cities_data
-        st.session_state.reasons_data = defaultdict(dict)
-        st.session_state.reason_labels = empty_reason_labels
-        st.session_state.cost_per_lead = 320
+        st.sidebar.error(f"⚠️ 警告：{DATA_FILE} 文件格式错误。使用默认结构。")
+        st.session_state.all_months_data = {"October": EMPTY_DATA_STRUCTURE}
 
 def serialize_data_for_export():
-    """将当前的 session state 数据整理成 standard_data.json 文件格式"""
-    reasons_data_clean = dict(st.session_state.reasons_data)
-    reason_labels_clean = dict(st.session_state.reason_labels)
-        
-    data_to_save = {
-        'cities_data': st.session_state.cities_data,
-        'reason_labels': reason_labels_clean,
-        'reasons_data': reasons_data_clean,
-        'cost_per_lead': st.session_state.cost_per_lead
-    }
+    """将当前的 session state 中的所有月份数据整理成 JSON 格式"""
+    
+    # 确保 reasons_data 从 defaultdict 转换为标准 dict
+    data_to_save = {}
+    for month, month_data in st.session_state.all_months_data.items():
+        if isinstance(month_data['reasons_data'], defaultdict):
+             month_data['reasons_data'] = dict(month_data['reasons_data'])
+        data_to_save[month] = month_data
+
     return json.dumps(data_to_save, ensure_ascii=False, indent=4)
 
-
 # 应用启动时，立即加载数据
-if 'cities_data' not in st.session_state:
+if 'all_months_data' not in st.session_state:
     load_standard_data()
 
-# ==================== 2. 侧边栏 - 数据输入 UI ====================
-st.sidebar.header("📊 核心数据输入")
-st.session_state.cost_per_lead = st.sidebar.number_input(
-    "单条线索成本(元)", 
-    value=st.session_state.get('cost_per_lead', 320), 
-    min_value=0, 
-    key='sidebar_cost_per_lead'
-)
-cost_per_lead = st.session_state.cost_per_lead
+# ==================== 2. 核心函数定义 (重构) ====================
 
-
-# 城市数据输入 - 使用折叠器组织
-with st.sidebar.expander("🏙️ 各城市转化数据", expanded=True):
-    for city in cities:
-        st.write(f"**{city}转化数据**")
-        cols = st.columns(2)
-        values = []
-        for i, stage in enumerate(stages):
-            col_idx = i % 2
-            initial_value = st.session_state.cities_data.get(city, [0]*6)[i]
-            
-            value = cols[col_idx].number_input(
-                f"{stage}",
-                value=initial_value,
-                key=f"{city}_{stage}",
-                min_value=0
-            )
-            values.append(value)
-        st.session_state.cities_data[city] = values
-        
-        
 # 未转化原因数据输入互动化函数
-def create_reason_inputs(stage_key, stage_title, reason_count=4):
-    """创建互动式的流失原因标签和数量输入 (已修复标签修改残留问题)"""
+def create_reason_inputs(current_data, stage_key, stage_title, reason_count=4):
+    """创建互动式的流失原因标签和数量输入 (标签修改残留问题已修复)"""
     
     st.subheader(stage_title)
     
@@ -115,39 +78,40 @@ def create_reason_inputs(stage_key, stage_title, reason_count=4):
     st.markdown("##### 📌 **原因标签设置 (影响所有城市)**")
     label_cols = st.columns(reason_count)
     current_labels = []
-    current_default_labels = st.session_state.reason_labels.get(stage_key, [''] * 4)
+    
+    # 从当前月份数据中获取标签
+    current_default_labels = current_data['reason_labels'].get(stage_key, [''] * 4)
     
     for i in range(reason_count):
         label = label_cols[i].text_input(
             f"原因 {i+1} 名称", 
             value=current_default_labels[i] if len(current_default_labels) > i else '',
-            key=f"label_{stage_key}_{i}"
+            key=f"label_{current_data['month']}_{stage_key}_{i}" # 键名加入月份，保证唯一
         )
         current_labels.append(label)
-    st.session_state.reason_labels[stage_key] = current_labels 
+    current_data['reason_labels'][stage_key] = current_labels 
     
     # 2. 各城市流失数量
     st.markdown("##### 🔢 **各城市流失数量**")
     
-    # 【核心修复点】创建一个干净的字典来存储当前 Stage 的新数据，自动丢弃旧标签
     new_reason_data_for_stage = {} 
     
     for city in cities:
         st.write(f"**{city}**")
         cols = st.columns(reason_count)
         
-        city_initial_data = st.session_state.reasons_data.get(stage_key, {}).get(city, {})
+        # 从当前月份数据中获取原因数量
+        city_initial_data = current_data['reasons_data'].get(stage_key, {}).get(city, {})
         city_reason_data = {} 
         
         for i in range(reason_count):
             label = current_labels[i] 
-            
             initial_value = city_initial_data.get(label, 0)
             
             value = cols[i].number_input(
                 f"{label} ({city})", 
                 value=initial_value, 
-                key=f"{stage_key}_{city}_{i}",
+                key=f"{current_data['month']}_{stage_key}_{city}_{i}", # 键名加入月份
                 min_value=0,
                 label_visibility="collapsed" 
             )
@@ -156,33 +120,11 @@ def create_reason_inputs(stage_key, stage_title, reason_count=4):
                 
         new_reason_data_for_stage[city] = city_reason_data
         
-    # 3. 用干净的新数据结构覆盖 session state
-    st.session_state.reasons_data[stage_key] = new_reason_data_for_stage
+    current_data['reasons_data'][stage_key] = new_reason_data_for_stage
 
 
-with st.sidebar.expander("🔍 未转化原因数据", expanded=False):
-    create_reason_inputs('invalid', "❌ 无效线索原因", reason_count=4)
-    create_reason_inputs('not_converted', "📞 未转化线索原因", reason_count=4)
-    create_reason_inputs('not_client', "👥 未转化客户原因", reason_count=4)
-    create_reason_inputs('not_visit', "🚫 未到访原因", reason_count=4)
-    create_reason_inputs('not_deal', "💸 未成交原因", reason_count=4)
-
-# ==================== 3. 开发者导出面板 ====================
-
-st.sidebar.markdown("---")
-st.sidebar.header("🔑 开发者数据导出")
-st.sidebar.info("请在修改数据或标签后，点击此按钮，复制 JSON 内容用于更新 GitHub 上的 `standard_data.json` 文件。")
-
-if st.sidebar.button("✨ 生成最新的 standard_data.json 内容", type="primary"):
-    json_output = serialize_data_for_export()
-    
-    st.header("📋 请复制以下 JSON 内容")
-    st.warning("完成复制后，请前往 GitHub 仓库，编辑 standard_data.json 文件，并用以下内容覆盖它。")
-    st.code(json_output, language='json', height=500)
-    st.toast("JSON 内容已生成在主页面！", icon='🎉')
-
-
-# ==================== 4. Plotly 图表函数定义 ====================
+# Plotly 图表函数 (保留原逻辑)
+# ... (create_beautiful_funnel, create_horizontal_funnel, create_simple_reason_chart, create_pie_chart_for_reason 定义不变)
 
 def create_beautiful_funnel(city_data, city_name, stages):
     """创建美观的垂直漏斗图"""
@@ -231,7 +173,7 @@ def create_horizontal_funnel(city_data, city_name, stages):
     return fig
 
 def create_simple_reason_chart(reasons_data_for_stage, title, cities):
-    """创建多城市流失原因柱状图分析，显示0值的原因名称""" # 修正点 3: 柱状图逻辑
+    """创建多城市流失原因柱状图分析，显示0值的原因名称"""
     
     cols_count = 3
     rows_count = int(np.ceil(len(cities) / cols_count))
@@ -243,7 +185,6 @@ def create_simple_reason_chart(reasons_data_for_stage, title, cities):
     
     for i, city in enumerate(cities):
         city_data = reasons_data_for_stage.get(city, {})
-        # 修正点 3 核心：只过滤空标签，不过滤数量为0的值
         valid_data = {k: v for k, v in city_data.items() if k}
         reasons = list(valid_data.keys())
         counts = list(valid_data.values())
@@ -251,7 +192,7 @@ def create_simple_reason_chart(reasons_data_for_stage, title, cities):
         row_idx = (i // cols_count) + 1
         col_idx = (i % cols_count) + 1
         
-        if reasons: # 只要有标签就添加 trace
+        if reasons:
             fig.add_trace(
                 go.Bar(name=city, y=reasons, x=counts, orientation='h', marker_color=colors[:len(reasons)],
                        text=counts, textposition='auto', showlegend=False),
@@ -291,25 +232,17 @@ def create_pie_chart_for_reason(reasons_data_for_stage, title, cities):
     return fig
 
 
-# ==================== 5. 主图表生成函数 (包含汇总看板更新) ====================
-
-def generate_charts():
-    cities_data = st.session_state.cities_data
-    reasons_data = st.session_state.reasons_data
-    cost_per_lead = st.session_state.cost_per_lead
-
+# 主图表生成函数 (传入当前月份数据)
+def generate_charts(current_data):
+    
+    cities_data = current_data['cities_data']
+    reasons_data = current_data['reasons_data']
+    cost_per_lead = current_data['cost_per_lead']
+    
     # ------------------- 汇总看板 (Summary Dashboard) -------------------
     col1, col2 = st.columns([3, 2])
     with col1:
         st.header("📈 数据汇总看板")
-        
-        # 修正点 2.1: 计算汇总数据
-        total_leads_agg = sum(cities_data.get(city, [0]*6)[0] for city in cities)
-        valid_leads_agg = sum(cities_data.get(city, [0]*6)[2] for city in cities)
-        clients_agg = sum(cities_data.get(city, [0]*6)[3] for city in cities)
-        visits_agg = sum(cities_data.get(city, [0]*6)[4] for city in cities)
-        deals_agg = sum(cities_data.get(city, [0]*6)[5] for city in cities)
-        total_cost_agg = total_leads_agg * cost_per_lead
         
         # 辅助函数：计算并格式化成本/率
         def calculate_metrics(total_leads, valid_leads, clients, visits, deals, total_cost):
@@ -326,10 +259,18 @@ def generate_charts():
                 '到访成本': f"¥{visit_cost:,.0f}" if visit_cost > 0 else "/",
                 '成交成本': f"¥{deal_cost:,.0f}" if deal_cost > 0 else "/"
             }
-
+        
+        # 1. 计算汇总数据
+        total_leads_agg = sum(cities_data.get(city, [0]*6)[0] for city in cities)
+        valid_leads_agg = sum(cities_data.get(city, [0]*6)[2] for city in cities)
+        clients_agg = sum(cities_data.get(city, [0]*6)[3] for city in cities)
+        visits_agg = sum(cities_data.get(city, [0]*6)[4] for city in cities)
+        deals_agg = sum(cities_data.get(city, [0]*6)[5] for city in cities)
+        total_cost_agg = total_leads_agg * cost_per_lead
+        
         summary_data = []
 
-        # 修正点 2.2: 添加 '汇总' 行
+        # 2. 添加 '汇总' 行
         agg_metrics = calculate_metrics(total_leads_agg, valid_leads_agg, clients_agg, visits_agg, deals_agg, total_cost_agg)
         aggregate_row = {
             '城市': '**汇总**',
@@ -340,7 +281,7 @@ def generate_charts():
         }
         summary_data.append(aggregate_row)
         
-        # 循环添加城市数据
+        # 3. 循环添加城市数据
         for city in cities:
              values = cities_data.get(city, [0]*6)
              
@@ -363,20 +304,12 @@ def generate_charts():
              })
         
         summary_df = pd.DataFrame(summary_data)
-        
         new_cols_order = ['城市', '线索总量', '**到访数量**', '**消费总数**', '线索有效率', '有效线索成本', '客户成本', '到访成本', '成交成本']
         summary_df = summary_df[new_cols_order]
         
-        # 确保 '汇总' 行的粗体显示
-        st.dataframe(
-            summary_df, 
-            use_container_width=True,
-            # 使用 CSS 注入来确保 Markdown 粗体生效（Streamlit 默认行为）
-        )
-        
-        # 修正点 4: 移除下载按钮
+        st.dataframe(summary_df, use_container_width=True)
 
-    # ------------------- 总转化漏斗图 (保留，代码不变) -------------------
+    # ------------------- 总转化漏斗图 -------------------
     with col2:
         st.header("🔢 线索量分布")
         leads_data = [cities_data.get(city, [0])[0] for city in cities]
@@ -389,11 +322,11 @@ def generate_charts():
         fig_pie.update_layout(height=350, showlegend=True)
         st.plotly_chart(fig_pie, use_container_width=True)
 
-    # ------------------- 转化漏斗 (保留，代码不变) -------------------
+    # ------------------- 转化漏斗 -------------------
     st.header("🎨 转化漏斗分析")
     tab1, tab2 = st.tabs(["🎯 垂直漏斗图", "📊 水平视图"])
     
-    city_display_groups = [cities[:3], cities[3:]]
+    city_display_groups = [cities[:3], cities[3:]] 
     
     with tab1:
         st.subheader("垂直漏斗图")
@@ -415,7 +348,7 @@ def generate_charts():
                     fig_h = create_horizontal_funnel(city_data, city, stages)
                     st.plotly_chart(fig_h, use_container_width=True)
     
-    # ------------------- 未转化客户深度分析 - 柱状图 (使用修正后的函数) -------------------
+    # ------------------- 未转化客户深度分析 - 柱状图 -------------------
     st.header("🔍 未转化客户深度分析 - 柱状图")
     reason_tab_bar1, reason_tab_bar2, reason_tab_bar3, reason_tab_bar4, reason_tab_bar5 = st.tabs([
         "❌ 无效线索原因", "📞 未转化线索原因", "👥 未转化客户原因", "🚫 未到访原因", "💸 未成交原因"
@@ -441,7 +374,7 @@ def generate_charts():
         fig_not_deal_bar = create_simple_reason_chart(reasons_data['not_deal'], "未成交原因", cities)
         st.plotly_chart(fig_not_deal_bar, use_container_width=True)
 
-    # ------------------- 未转化客户深度分析 - 饼图 (保留，代码不变) -------------------
+    # ------------------- 未转化客户深度分析 - 饼图 -------------------
     st.header("🥧 未转化客户深度分析 - 饼图")
     pie_tab1, pie_tab2, pie_tab3, pie_tab4, pie_tab5 = st.tabs([
         "❌ 无效线索**原因分布**", "📞 未转化线索**原因分布**", "👥 未转化客户**原因分布**", "🚫 未到访**原因分布**", "💸 未成交**原因分布**"
@@ -468,10 +401,84 @@ def generate_charts():
         st.plotly_chart(fig_not_deal_pie, use_container_width=True)
 
 
-# 运行主函数
-if __name__ == "__main__":
-    generate_charts()
-    
-# 操作提示
+# ==================== 6. 主应用入口 (集成标签页) ====================
+
+# 1. 侧边栏：定义当前月份和添加新月份
 st.sidebar.markdown("---")
-st.sidebar.success("✅ **请记住：** 在您修改数字后，务必点击上方的 **'生成最新的 standard_data.json 内容'** 按钮，并将结果复制粘贴回 GitHub！")
+st.sidebar.header("🗓️ 月份管理")
+
+# 确保月份是按字母顺序排列的
+available_months = sorted(st.session_state.all_months_data.keys(), reverse=True)
+current_month = st.sidebar.radio("选择/编辑月份:", available_months, key="month_selector")
+st.session_state.current_month = current_month
+
+# 获取当前月份的数据对象
+current_data = st.session_state.all_months_data[current_month]
+current_data['month'] = current_month # 注入月份名，用于 key
+
+# 2. 侧边栏 - 数据输入 UI (使用当前月份的数据)
+st.sidebar.header(f"📊 {current_month}核心数据输入")
+current_data['cost_per_lead'] = st.sidebar.number_input(
+    "单条线索成本(元)", 
+    value=current_data.get('cost_per_lead', 320), 
+    min_value=0, 
+    key=f'{current_month}_sidebar_cost_per_lead'
+)
+
+# 城市数据输入 - 使用折叠器组织
+with st.sidebar.expander(f"🏙️ {current_month}各城市转化数据", expanded=True):
+    for city in cities:
+        st.write(f"**{city}转化数据**")
+        cols = st.columns(2)
+        values = []
+        for i, stage in enumerate(stages):
+            col_idx = i % 2
+            initial_value = current_data['cities_data'].get(city, [0]*6)[i]
+            
+            value = cols[col_idx].number_input(
+                f"{stage}",
+                value=initial_value,
+                key=f"{current_month}_{city}_{stage}", # 键名加入月份
+                min_value=0
+            )
+            values.append(value)
+        current_data['cities_data'][city] = values
+        
+with st.sidebar.expander(f"🔍 {current_month}未转化原因数据", expanded=False):
+    create_reason_inputs(current_data, 'invalid', "❌ 无效线索原因", reason_count=4)
+    create_reason_inputs(current_data, 'not_converted', "📞 未转化线索原因", reason_count=4)
+    create_reason_inputs(current_data, 'not_client', "👥 未转化客户原因", reason_count=4)
+    create_reason_inputs(current_data, 'not_visit', "🚫 未到访原因", reason_count=4)
+    create_reason_inputs(current_data, 'not_deal', "💸 未成交原因", reason_count=4)
+
+# 添加新月份功能
+st.sidebar.markdown("---")
+new_month = st.sidebar.text_input("新增月份名称 (例如：November)")
+if st.sidebar.button("➕ 创建新月份数据"):
+    if new_month and new_month not in st.session_state.all_months_data:
+        # 使用深拷贝创建一套全新的默认数据
+        new_data = {
+            'cities_data': {city: [0]*6 for city in cities},
+            'reason_labels': {k: list(v) for k, v in EMPTY_DATA_STRUCTURE['reason_labels'].items()},
+            'reasons_data': defaultdict(dict),
+            'cost_per_lead': current_data.get('cost_per_lead', 320) # 继承当前成本
+        }
+        st.session_state.all_months_data[new_month] = new_data
+        st.experimental_rerun() # 重新运行应用，加载新月份
+
+# 3. 运行图表生成函数 (基于当前月份数据)
+if __name__ == "__main__":
+    generate_charts(current_data)
+    
+# 4. 导出面板 (导出所有月份数据)
+st.sidebar.markdown("---")
+st.sidebar.header("🔑 开发者数据导出")
+st.sidebar.info("请在修改数据或标签后，点击此按钮，复制 **所有月份** 的 JSON 内容用于更新 GitHub 上的 `standard_data.json` 文件。")
+
+if st.sidebar.button("✨ 生成最新的 standard_data.json 内容", type="primary"):
+    json_output = serialize_data_for_export()
+    
+    st.header("📋 请复制以下 JSON 内容")
+    st.warning("完成后，请前往 GitHub 仓库，编辑 standard_data.json 文件，并用以下内容覆盖它。")
+    st.code(json_output, language='json', height=500)
+    st.toast("JSON 内容已生成在主页面！", icon='🎉')
