@@ -1,4 +1,4 @@
-streamlit
+streamlit>=1.30.0  # 明确指定一个较新的版本
 pandas
 numpy
 plotly
