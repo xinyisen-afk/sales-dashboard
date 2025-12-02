@@ -7,7 +7,7 @@ import json
 import os
 from collections import defaultdict
 import numpy as np
-from io import StringIO
+from io import StringIO # 保留，但目前不使用
 
 # 网页标题和配置
 st.set_page_config(page_title="本月销售数据分析系统", layout="wide")
@@ -106,10 +106,6 @@ if 'all_months_data' not in st.session_state:
 
 # ==================== 2. 核心函数定义 (图表和原因输入) ====================
 
-# ... (create_reason_inputs, create_beautiful_funnel, create_horizontal_funnel, 
-# create_simple_reason_chart, create_pie_chart_for_reason, create_creative_funnel 保持不变)
-
-# 未转化原因数据输入互动化函数 (保持不变)
 def create_reason_inputs(current_data, stage_key, stage_title, reason_count=4):
     """创建互动式的流失原因标签和数量输入"""
     
@@ -290,8 +286,6 @@ def create_creative_funnel(creative_data, creative_name):
 # =======================================================
 # 3. 销售数据总览看板函数 (保持不变)
 # =======================================================
-
-# ... (generate_sales_charts 保持不变)
 
 def generate_sales_charts(current_data):
     
@@ -704,109 +698,89 @@ sales_tab, creative_tab, edit_tab = st.tabs([
     "⚙️ 数据编辑"
 ])
 
+# 初始化用于保存编辑中数据的临时状态
+if f'{current_month}_edited_creatives_data' not in st.session_state:
+    # 第一次加载时，将当前数据复制到编辑缓冲区
+    st.session_state[f'{current_month}_edited_creatives_data'] = current_data.get('creatives_data', EMPTY_DATA_STRUCTURE['creatives_data'])[:]
+    
+# 确保编辑缓冲区始终是 list of dicts
+editable_data_list = st.session_state[f'{current_month}_edited_creatives_data']
+df_creatives = pd.DataFrame(editable_data_list)
+
 with sales_tab:
     generate_sales_charts(current_data)
 
 with creative_tab:
     generate_creative_charts(current_data)
     
-with edit_tab: # 数据编辑标签页 - **重大修改：改为复制粘贴输入**
-    st.header(f"⚙️ {current_month} - 广告素材数据粘贴编辑")
-    st.markdown("""
-        **粘贴数据步骤：**
-        1. 在 Excel 或表格软件中，按照下方显示的**列标题顺序**整理好您的素材数据。
-        2. 复制包含**标题行**和所有数据的区域。
-        3. 粘贴到下方的输入框中，然后点击 **确认更新数据** 按钮。
-    """)
+with edit_tab: # 数据编辑标签页 - **恢复 data_editor 并增加确认按钮**
+    st.header(f"⚙️ {current_month} - 广告素材数据编辑")
+    st.warning("您可以在下方表格中编辑、添加或删除数据。所有更改只有在点击 **'确认保存更改'** 后才会生效并更新分析图表。")
     
-    # ---------------------------------------------
-    # 1. 期望的数据格式示例
-    # ---------------------------------------------
     required_cols = ["Creative Name", "Creative ID", "Link", "Cost", "Leads", "Valid Leads", "Clients", "Visits", "Deals"]
-    col_names_cn = ["素材简称", "素材ID", "素材链接", "总成本", "线索量", "有效线索", "客户数", "到访数", "成交数"]
-
-    st.subheader("📚 期望的列标题顺序：")
-    st.code(" | ".join(col_names_cn))
-
-    # ---------------------------------------------
-    # 2. 粘贴输入框
-    # ---------------------------------------------
-    # 使用会话状态来保存粘贴的内容，避免 rerun 丢失
-    if 'pasted_creative_data' not in st.session_state:
-        st.session_state.pasted_creative_data = ""
-        
-    pasted_data = st.text_area(
-        "📝 将 Excel/CSV 数据粘贴到这里 (包含标题行)",
-        height=300,
-        key=f"{current_month}_creative_paste_area"
+    
+    # 定义可编辑的列类型
+    column_config = {
+        "Creative Name": st.column_config.TextColumn("素材简称", required=True),
+        "Creative ID": st.column_config.TextColumn("素材ID", required=True),
+        "Link": st.column_config.LinkColumn("素材链接", required=False, help="素材的 URL 链接", display_text="链接"),
+        "Cost": st.column_config.NumberColumn("成本 (¥)", required=True, min_value=0, format="%.0f"),
+        "Leads": st.column_config.NumberColumn("线索量", required=True, min_value=0, format="%d"),
+        "Valid Leads": st.column_config.NumberColumn("有效线索", required=True, min_value=0, format="%d"),
+        "Clients": st.column_config.NumberColumn("客户数", required=True, min_value=0, format="%d"),
+        "Visits": st.column_config.NumberColumn("到访数", required=True, min_value=0, format="%d"),
+        "Deals": st.column_config.NumberColumn("成交数", required=True, min_value=0, format="%d"),
+    }
+    
+    # 使用 data_editor 进行编辑，并将输出直接存入一个临时的 Session State 变量
+    # 这样用户编辑时就不会立即触发整个应用的重新运行，提高输入稳定性
+    edited_df = st.data_editor(
+        df_creatives,
+        column_config=column_config,
+        num_rows="dynamic",
+        use_container_width=True,
+        # 确保 key 绝对唯一
+        key=f"{current_month}_creative_data_editor_temp" 
     )
     
-    # 将输入框的内容实时保存到 session state，即使发生 rerun 也不丢失
-    st.session_state.pasted_creative_data = pasted_data
+    # 将 data_editor 的当前输出（可能是编辑中的数据）保存到编辑缓冲区
+    st.session_state[f'{current_month}_edited_creatives_data'] = edited_df.to_dict('records')
 
-    # ---------------------------------------------
-    # 3. 确认按钮逻辑
-    # ---------------------------------------------
-    if st.button("✅ 确认更新数据", type="primary", key=f"{current_month}_confirm_update_btn"):
-        if st.session_state.pasted_creative_data:
-            try:
-                # 使用 StringIO 将字符串模拟成文件，用 pandas 读取
-                df_new = pd.read_csv(StringIO(st.session_state.pasted_creative_data), sep=r'\s{2,}|,', engine='python', skipinitialspace=True)
-                
-                # 检查列名是否匹配 (处理中文或英文列名)
-                # 尝试将中文列名映射为英文键名
-                col_mapping_cn = dict(zip(col_names_cn, required_cols))
-                
-                # 兼容处理：检查用户输入的是中文名还是英文键名
-                if any(col in df_new.columns for col in col_names_cn):
-                    df_new.rename(columns=col_mapping_cn, inplace=True)
-
-                # 确保所有必需的英文列都存在
-                if not all(col in df_new.columns for col in required_cols):
-                    st.error(f"❌ 数据格式错误：粘贴的列名不匹配。请确保包含以下所有列（中英文皆可）：{', '.join(col_names_cn)}")
-                else:
-                    # 仅保留需要的列
-                    df_final = df_new[required_cols].copy()
-                    
-                    # 清理和转换数字类型
-                    numeric_cols = ["Cost", "Leads", "Valid Leads", "Clients", "Visits", "Deals"]
-                    for col in numeric_cols:
-                        df_final[col] = pd.to_numeric(df_final[col], errors='coerce').fillna(0)
-                        df_final[col] = df_final[col].astype(int) # 转换为整数
-                    
-                    # 更新 session state
-                    current_data['creatives_data'] = df_final.to_dict('records')
-                    st.success("🎉 广告素材数据已成功更新！请查看 '广告素材效果分析' 标签页。")
-                    
-                    # 清空粘贴区，避免二次提交
-                    st.session_state.pasted_creative_data = ""
-                    # 触发重新运行，清除粘贴区内容并更新图表
-                    st.experimental_rerun()
-                    
-            except Exception as e:
-                st.error(f"❌ 数据解析失败。请检查粘贴内容是否是标准表格格式，并确保包含标题行。错误信息：{e}")
-        else:
-            st.warning("请先粘贴数据后再点击确认按钮。")
-
-    # ---------------------------------------------
-    # 4. 预览当前数据 (只读)
-    # ---------------------------------------------
-    st.subheader("👀 当前已保存的素材数据 (只读预览)")
+    st.markdown("---")
     
-    df_current = pd.DataFrame(current_data.get('creatives_data', EMPTY_DATA_STRUCTURE['creatives_data']))
-    
-    # 映射回中文名进行展示
-    col_mapping_cn_display = dict(zip(required_cols, col_names_cn))
-    
-    if not df_current.empty:
-        df_current_display = df_current.rename(columns=col_mapping_cn_display)
-        # 仅显示中文列名
-        df_current_display = df_current_display[col_names_cn]
+    # 确认按钮的逻辑
+    if st.button("✅ 确认保存更改", type="primary", key=f"{current_month}_confirm_save_btn"):
         
-        st.dataframe(df_current_display, use_container_width=True)
-    else:
-        st.info("当前月份没有素材数据。")
-
+        temp_data_list = st.session_state[f'{current_month}_edited_creatives_data']
+        
+        # 数据清理和校验
+        final_data = []
+        for row in temp_data_list:
+            
+            # 确保关键 ID 字段不为空
+            if not row.get("Creative Name") or not row.get("Creative ID"):
+                continue # 跳过不完整的行
+                
+            # 强制转换数字类型
+            new_row = row.copy()
+            numeric_cols = ["Cost", "Leads", "Valid Leads", "Clients", "Visits", "Deals"]
+            for col in numeric_cols:
+                 # 尝试转换为 int，如果失败则默认为 0
+                try:
+                    new_row[col] = int(float(new_row.get(col, 0))) 
+                except:
+                    new_row[col] = 0
+            
+            final_data.append(new_row)
+            
+        # 覆盖应用的真实数据
+        current_data['creatives_data'] = final_data
+        
+        st.success("🎉 广告素材数据已成功保存！分析页面已同步更新。")
+        # 触发一次重新运行，让图表和分析页面展示新数据
+        st.experimental_rerun()
+        
+    st.info("💡 小提示：在表格中编辑完所有数字后，再点击上方的 **'确认保存更改'** 按钮，数据就会被更新。")
 
 # 7. 导出面板 (导出所有月份数据) 
 st.sidebar.markdown("---")
