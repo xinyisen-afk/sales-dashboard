@@ -7,6 +7,7 @@ import json
 import os
 from collections import defaultdict
 import numpy as np
+from io import StringIO
 
 # 网页标题和配置
 st.set_page_config(page_title="本月销售数据分析系统", layout="wide")
@@ -36,7 +37,7 @@ EMPTY_DATA_STRUCTURE = {
     },
     'reasons_data': defaultdict(dict),
     'cost_per_lead': 320,
-    # 更新默认素材数据结构：新增 Creative Name 和 Link
+    # 更新默认素材数据结构：新增 Creative Name, Link, 数量字段
     'creatives_data': [
         {"Creative Name": "Default_1", "Creative ID": "A001", "Link": "http://example.com", "Cost": 0, "Leads": 0, "Valid Leads": 0, "Clients": 0, "Visits": 0, "Deals": 0}
     ]
@@ -48,12 +49,12 @@ def load_standard_data():
     try:
         with open(DATA_FILE, 'r', encoding='utf-8') as f:
             data = json.load(f)
-            # 确保每个月份都有 creatives_data 字段，并兼容旧的 'ID' 字段
+            
             for month in data:
                 if 'creatives_data' not in data[month]:
                     data[month]['creatives_data'] = EMPTY_DATA_STRUCTURE['creatives_data']
                 else:
-                    # 兼容性处理：检查并确保所有必需的新字段存在
+                    # 兼容性处理：确保所有必需的新字段存在
                     for creative in data[month]['creatives_data']:
                         # 处理旧的 'ID' 字段，拆分为 Name/ID
                         if 'Creative Name' not in creative and 'ID' in creative:
@@ -63,7 +64,6 @@ def load_standard_data():
                                 name, id_val = parts[0], parts[1]
                             creative['Creative Name'] = name
                             creative['Creative ID'] = id_val
-                            # 如果旧的 ID 字段存在，则删除它，避免混淆
                             if 'ID' in creative:
                                 del creative['ID']
                             
@@ -71,16 +71,22 @@ def load_standard_data():
                         if 'Creative Name' not in creative: creative['Creative Name'] = 'Unknown'
                         if 'Creative ID' not in creative: creative['Creative ID'] = 'Unknown'
                         if 'Link' not in creative: creative['Link'] = '无链接'
+                        
+                        # 确保所有数字字段存在并是数字类型
+                        for key in ["Cost", "Leads", "Valid Leads", "Clients", "Visits", "Deals"]:
+                            if key not in creative: creative[key] = 0
+                            try:
+                                creative[key] = float(creative[key]) # 强制转换为浮点/数字
+                            except:
+                                creative[key] = 0
                             
             st.session_state.all_months_data = data
             st.sidebar.success("✅ 已加载多月份标准数据。")
     except FileNotFoundError:
         st.sidebar.error(f"⚠️ 警告：未找到 {DATA_FILE} 文件。创建默认结构。")
-        # **更新默认加载月份**
         st.session_state.all_months_data = {DEFAULT_MONTH: EMPTY_DATA_STRUCTURE}
     except json.JSONDecodeError:
         st.sidebar.error(f"⚠️ 警告：{DATA_FILE} 文件格式错误。使用默认结构。")
-        # **更新默认加载月份**
         st.session_state.all_months_data = {DEFAULT_MONTH: EMPTY_DATA_STRUCTURE}
 
 def serialize_data_for_export():
@@ -99,6 +105,9 @@ if 'all_months_data' not in st.session_state:
     load_standard_data()
 
 # ==================== 2. 核心函数定义 (图表和原因输入) ====================
+
+# ... (create_reason_inputs, create_beautiful_funnel, create_horizontal_funnel, 
+# create_simple_reason_chart, create_pie_chart_for_reason, create_creative_funnel 保持不变)
 
 # 未转化原因数据输入互动化函数 (保持不变)
 def create_reason_inputs(current_data, stage_key, stage_title, reason_count=4):
@@ -154,9 +163,7 @@ def create_reason_inputs(current_data, stage_key, stage_title, reason_count=4):
         
     current_data['reasons_data'][stage_key] = new_reason_data_for_stage
 
-# Plotly 图表函数 (垂直漏斗图)
 def create_beautiful_funnel(city_data, city_name, stages):
-    """创建美观的垂直漏斗图"""
     values = city_data
     color_schemes = {
         '从化': ['#FF6B6B', '#FF8E8E', '#FFB1B1', '#FFD4D4', '#FFE8E8', '#FFF5F5'],
@@ -182,12 +189,10 @@ def create_beautiful_funnel(city_data, city_name, stages):
     )
     return fig
 
-# Plotly 图表函数 (水平漏斗图)
 def create_horizontal_funnel(city_data, city_name, stages):
-    """创建水平漏斗图"""
     values = city_data
     horizontal_colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFD700', '#DDA0DD']
-    valid_values = [v if v > 0 else 0.1 for v in values] # 避免0值显示问题
+    valid_values = [v if v > 0 else 0.1 for v in values]
     
     fig = go.Figure(go.Funnel(
         y=stages, x=valid_values, orientation="h", textposition="inside", textinfo="value+percent initial",
@@ -202,10 +207,7 @@ def create_horizontal_funnel(city_data, city_name, stages):
     )
     return fig
 
-# Plotly 图表函数 (流失原因柱状图和饼图, 保持不变)
 def create_simple_reason_chart(reasons_data_for_stage, title, cities):
-    """创建多城市流失原因柱状图分析，显示0值的原因名称"""
-    
     cols_count = 3
     rows_count = int(np.ceil(len(cities) / cols_count))
     
@@ -235,8 +237,6 @@ def create_simple_reason_chart(reasons_data_for_stage, title, cities):
     return fig
 
 def create_pie_chart_for_reason(reasons_data_for_stage, title, cities):
-    """创建多城市流失原因饼图分析"""
-    
     cols_count = 3
     rows_count = int(np.ceil(len(cities) / cols_count))
 
@@ -262,9 +262,7 @@ def create_pie_chart_for_reason(reasons_data_for_stage, title, cities):
     fig.update_layout(height=rows_count * 400, showlegend=False, title_text=f"<b>{title}占比分析</b>", title_x=0.5)
     return fig
 
-# 新增：素材漏斗图创建函数
 def create_creative_funnel(creative_data, creative_name):
-    """创建素材转化漏斗图"""
     stages_names = ["线索量", "有效线索", "客户数", "到访数", "成交数"]
     values = [
         creative_data.get('Leads', 0), creative_data.get('Valid Leads', 0), 
@@ -288,9 +286,12 @@ def create_creative_funnel(creative_data, creative_name):
     )
     return fig
 
+
 # =======================================================
 # 3. 销售数据总览看板函数 (保持不变)
 # =======================================================
+
+# ... (generate_sales_charts 保持不变)
 
 def generate_sales_charts(current_data):
     
@@ -460,7 +461,7 @@ def generate_sales_charts(current_data):
 
 
 # =======================================================
-# 4. 广告素材分析看板函数 (已更新指标和漏斗图)
+# 4. 广告素材分析看板函数 (保持不变)
 # =======================================================
 
 def generate_creative_charts(current_data):
@@ -471,6 +472,7 @@ def generate_creative_charts(current_data):
         st.warning("当前月份没有广告素材数据。请前往 '⚙️ 数据编辑' 标签页添加数据。")
         return
 
+    # 从 list of dicts 创建 DataFrame
     df = pd.DataFrame(creatives_data)
 
     # 确保列名是可用的 (新增 Creative Name, Link)
@@ -479,6 +481,11 @@ def generate_creative_charts(current_data):
         if col not in df.columns:
             # 尝试给缺失的列一个默认值，以避免计算时崩溃
             df[col] = 0 if col in ["Cost", "Leads", "Valid Leads", "Clients", "Visits", "Deals"] else 'N/A'
+        
+    # **确保数值列是数字类型 (非常重要，防止粘贴数据后是字符串)**
+    numeric_cols = ["Cost", "Leads", "Valid Leads", "Clients", "Visits", "Deals"]
+    for col in numeric_cols:
+        df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
             
     # 计算核心指标 (新增 Visit CPL 和 Deal CPL)
     df['CPL'] = df['Cost'] / df['Leads'].replace(0, np.nan)
@@ -535,7 +542,7 @@ def generate_creative_charts(current_data):
     # 调整显示列顺序，将新增的字段和成本放在合适的位置
     cols_to_display = ["Creative Name", "Creative ID", "Link", "Cost", "Leads", "Valid Leads", "Clients", "Visits", "Deals", 
                        "Valid Rate", "Client Rate", "Visit Rate", "Deal Rate", 
-                       "CPL", "Valid CPL", "Client CPL", "Visit CPL", "Deal CPL"] # 新增 Visit CPL, Deal CPL
+                       "CPL", "Valid CPL", "Client CPL", "Visit CPL", "Deal CPL"] 
 
     # 应用格式化
     for col, func in format_mapping.items():
@@ -547,9 +554,8 @@ def generate_creative_charts(current_data):
     
     st.dataframe(display_df, use_container_width=True)
 
-    # 2. 成本指标对比图
+    # 2. 成本指标对比图 (保持不变)
     st.header("📊 素材成本指标对比")
-    # 包含新增的 Visit CPL 和 Deal CPL
     cost_metrics = ['CPL', 'Valid CPL', 'Client CPL', 'Visit CPL', 'Deal CPL']
     
     df_cost_melt = df.melt(
@@ -569,7 +575,6 @@ def generate_creative_charts(current_data):
         barmode='group',
         text='成本金额',
         title='各素材分阶段成本对比',
-        # 更新颜色映射
         color_discrete_map={
             metric_map['CPL']: '#00bfa5',
             metric_map['Valid CPL']: '#4E79A7',
@@ -591,7 +596,7 @@ def generate_creative_charts(current_data):
     st.plotly_chart(fig_costs, use_container_width=True)
 
 
-    # 3. 转化率对比图 
+    # 3. 转化率对比图 (保持不变)
     st.subheader("转化率对比")
     
     df_melt_rate = df[['Creative Name', 'Valid Rate', 'Client Rate', 'Visit Rate', 'Deal Rate']].rename(columns=metric_map).melt(
@@ -613,18 +618,14 @@ def generate_creative_charts(current_data):
     st.plotly_chart(fig_rate, use_container_width=True)
 
 
-    # 4. 每个素材的漏斗图 (新增功能)
+    # 4. 每个素材的漏斗图 (保持不变)
     st.header("🎯 单素材转化漏斗分析")
     
     cols_per_row = 3
-    
-    # 创建 Streamlit 的列布局
     funnel_cols = st.columns(cols_per_row)
     
     for i, row in df.iterrows():
         creative_name = row['Creative Name']
-        
-        # 确定当前素材在哪一列
         col_index = i % cols_per_row
         
         with funnel_cols[col_index]:
@@ -639,14 +640,13 @@ st.sidebar.markdown("---")
 st.sidebar.header("🗓️ 月份管理")
 
 available_months = sorted(st.session_state.all_months_data.keys(), reverse=True)
-# key 确保唯一
 current_month = st.sidebar.radio("选择/编辑月份:", available_months, key="month_selector_sidebar") 
 st.session_state.current_month = current_month
 
 current_data = st.session_state.all_months_data[current_month]
-current_data['month'] = current_month # 注入月份名，用于 key
+current_data['month'] = current_month 
 
-# 2. 侧边栏 - 数据输入 UI 
+# 2. 侧边栏 - 数据输入 UI (保持不变)
 st.sidebar.header(f"📊 {current_month}核心数据输入")
 current_data['cost_per_lead'] = st.sidebar.number_input(
     "单条线索成本(元)", 
@@ -668,7 +668,6 @@ with st.sidebar.expander(f"🏙️ {current_month}城市转化数据", expanded=
             value = cols[col_idx].number_input(
                 f"{stage}",
                 value=initial_value,
-                # key 确保唯一：月份_城市_阶段
                 key=f"{current_month}_{city}_{stage}", 
                 min_value=0
             )
@@ -685,7 +684,6 @@ with st.sidebar.expander(f"🔍 {current_month}流失原因数据", expanded=Fal
 
 # 添加新月份功能
 st.sidebar.markdown("---")
-# key 确保唯一
 new_month = st.sidebar.text_input("新增月份名称 (例如：December)", key="new_month_input") 
 if st.sidebar.button("➕ 创建新月份数据"):
     if new_month and new_month not in st.session_state.all_months_data:
@@ -712,50 +710,104 @@ with sales_tab:
 with creative_tab:
     generate_creative_charts(current_data)
     
-with edit_tab: # 数据编辑标签页 
-    st.header(f"⚙️ {current_month} - 广告素材数据编辑")
-    st.warning("请在此处编辑、添加或删除广告素材的数据。编辑完成后，数据会自动更新到分析页面。")
+with edit_tab: # 数据编辑标签页 - **重大修改：改为复制粘贴输入**
+    st.header(f"⚙️ {current_month} - 广告素材数据粘贴编辑")
+    st.markdown("""
+        **粘贴数据步骤：**
+        1. 在 Excel 或表格软件中，按照下方显示的**列标题顺序**整理好您的素材数据。
+        2. 复制包含**标题行**和所有数据的区域。
+        3. 粘贴到下方的输入框中，然后点击 **确认更新数据** 按钮。
+    """)
     
-    # 广告素材数据输入
-    # 确保从 session state 加载最新的数据
-    df_creatives = pd.DataFrame(current_data.get('creatives_data', EMPTY_DATA_STRUCTURE['creatives_data']))
-    
-    # 定义可编辑的列类型 (更新配置，确保数字和文本输入稳定性)
-    column_config = {
-        "Creative Name": st.column_config.TextColumn("素材简称", required=True),
-        "Creative ID": st.column_config.TextColumn("素材ID", required=True),
-        # 优化：使用 LinkColumn 更好支持 URL
-        "Link": st.column_config.LinkColumn("素材链接", required=False, help="素材的 URL 链接", display_text="链接"),
-        # 优化：明确使用 NumberColumn 确保输入稳定
-        "Cost": st.column_config.NumberColumn("成本 (¥)", required=True, min_value=0, format="%.0f"),
-        "Leads": st.column_config.NumberColumn("线索量", required=True, min_value=0, format="%d"),
-        "Valid Leads": st.column_config.NumberColumn("有效线索", required=True, min_value=0, format="%d"),
-        "Clients": st.column_config.NumberColumn("客户数", required=True, min_value=0, format="%d"),
-        "Visits": st.column_config.NumberColumn("到访数", required=True, min_value=0, format="%d"),
-        "Deals": st.column_config.NumberColumn("成交数", required=True, min_value=0, format="%d"),
-    }
-    
-    display_cols = ["Creative Name", "Creative ID", "Link", "Cost", "Leads", "Valid Leads", "Clients", "Visits", "Deals"]
-    
-    # 确保 DataFrame 只有需要的列，并填充缺失值
-    if not df_creatives.empty:
-        df_creatives = df_creatives.reindex(columns=display_cols, fill_value=0) # 数量列默认为0
-        df_creatives['Creative Name'] = df_creatives['Creative Name'].replace(0, 'Unknown')
-        df_creatives['Creative ID'] = df_creatives['Creative ID'].replace(0, 'Unknown')
-        df_creatives['Link'] = df_creatives['Link'].replace(0, '无链接')
+    # ---------------------------------------------
+    # 1. 期望的数据格式示例
+    # ---------------------------------------------
+    required_cols = ["Creative Name", "Creative ID", "Link", "Cost", "Leads", "Valid Leads", "Clients", "Visits", "Deals"]
+    col_names_cn = ["素材简称", "素材ID", "素材链接", "总成本", "线索量", "有效线索", "客户数", "到访数", "成交数"]
 
-    edited_df = st.data_editor(
-        df_creatives,
-        column_config=column_config,
-        num_rows="dynamic",
-        use_container_width=True,
-        # 确保 key 绝对唯一，不依赖任何输入
-        key=f"{current_month}_creative_data_editor_main" 
+    st.subheader("📚 期望的列标题顺序：")
+    st.code(" | ".join(col_names_cn))
+
+    # ---------------------------------------------
+    # 2. 粘贴输入框
+    # ---------------------------------------------
+    # 使用会话状态来保存粘贴的内容，避免 rerun 丢失
+    if 'pasted_creative_data' not in st.session_state:
+        st.session_state.pasted_creative_data = ""
+        
+    pasted_data = st.text_area(
+        "📝 将 Excel/CSV 数据粘贴到这里 (包含标题行)",
+        height=300,
+        key=f"{current_month}_creative_paste_area"
     )
     
-    # 将编辑后的 DataFrame 转换回 list of dicts 存入 current_data
-    current_data['creatives_data'] = edited_df.to_dict('records')
+    # 将输入框的内容实时保存到 session state，即使发生 rerun 也不丢失
+    st.session_state.pasted_creative_data = pasted_data
+
+    # ---------------------------------------------
+    # 3. 确认按钮逻辑
+    # ---------------------------------------------
+    if st.button("✅ 确认更新数据", type="primary", key=f"{current_month}_confirm_update_btn"):
+        if st.session_state.pasted_creative_data:
+            try:
+                # 使用 StringIO 将字符串模拟成文件，用 pandas 读取
+                df_new = pd.read_csv(StringIO(st.session_state.pasted_creative_data), sep=r'\s{2,}|,', engine='python', skipinitialspace=True)
+                
+                # 检查列名是否匹配 (处理中文或英文列名)
+                # 尝试将中文列名映射为英文键名
+                col_mapping_cn = dict(zip(col_names_cn, required_cols))
+                
+                # 兼容处理：检查用户输入的是中文名还是英文键名
+                if any(col in df_new.columns for col in col_names_cn):
+                    df_new.rename(columns=col_mapping_cn, inplace=True)
+
+                # 确保所有必需的英文列都存在
+                if not all(col in df_new.columns for col in required_cols):
+                    st.error(f"❌ 数据格式错误：粘贴的列名不匹配。请确保包含以下所有列（中英文皆可）：{', '.join(col_names_cn)}")
+                else:
+                    # 仅保留需要的列
+                    df_final = df_new[required_cols].copy()
+                    
+                    # 清理和转换数字类型
+                    numeric_cols = ["Cost", "Leads", "Valid Leads", "Clients", "Visits", "Deals"]
+                    for col in numeric_cols:
+                        df_final[col] = pd.to_numeric(df_final[col], errors='coerce').fillna(0)
+                        df_final[col] = df_final[col].astype(int) # 转换为整数
+                    
+                    # 更新 session state
+                    current_data['creatives_data'] = df_final.to_dict('records')
+                    st.success("🎉 广告素材数据已成功更新！请查看 '广告素材效果分析' 标签页。")
+                    
+                    # 清空粘贴区，避免二次提交
+                    st.session_state.pasted_creative_data = ""
+                    # 触发重新运行，清除粘贴区内容并更新图表
+                    st.experimental_rerun()
+                    
+            except Exception as e:
+                st.error(f"❌ 数据解析失败。请检查粘贴内容是否是标准表格格式，并确保包含标题行。错误信息：{e}")
+        else:
+            st.warning("请先粘贴数据后再点击确认按钮。")
+
+    # ---------------------------------------------
+    # 4. 预览当前数据 (只读)
+    # ---------------------------------------------
+    st.subheader("👀 当前已保存的素材数据 (只读预览)")
     
+    df_current = pd.DataFrame(current_data.get('creatives_data', EMPTY_DATA_STRUCTURE['creatives_data']))
+    
+    # 映射回中文名进行展示
+    col_mapping_cn_display = dict(zip(required_cols, col_names_cn))
+    
+    if not df_current.empty:
+        df_current_display = df_current.rename(columns=col_mapping_cn_display)
+        # 仅显示中文列名
+        df_current_display = df_current_display[col_names_cn]
+        
+        st.dataframe(df_current_display, use_container_width=True)
+    else:
+        st.info("当前月份没有素材数据。")
+
+
 # 7. 导出面板 (导出所有月份数据) 
 st.sidebar.markdown("---")
 st.sidebar.header("🔑 开发者数据导出")
