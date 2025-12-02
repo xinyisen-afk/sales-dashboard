@@ -11,16 +11,15 @@ import numpy as np
 # 网页标题和配置
 st.set_page_config(page_title="本月销售数据分析系统", layout="wide")
 st.title("🎯 本月销售与广告数据分析系统")
-st.info("💡 广告素材数据现在通过更稳定的批量文本输入框进行编辑。所有更改将在点击侧边栏底部的 **'💾 保存所有更改'** 时生效。")
-
+st.info("💡 **重要提示：** 数据更改将实时更新图表，但不会自动保存到文件。请点击侧边栏的 **'生成最新的 JSON 数据'** 按钮，复制内容并手动更新您的 `standard_data.json` 文件。")
 
 # 定义数据文件路径
 DATA_FILE = 'standard_data.json'
 cities = ['从化', '中山', '江门', '南沙二园', '佛山']
 stages = ['线索量', '接通数', '有效数', '客户数', '到访数', '成交数']
 
-# 默认月份
-DEFAULT_MONTH = "November" # 修改为 11月示例
+# 默认月份 (十一月)
+DEFAULT_MONTH = "November"
 
 # =======================================================
 # 1. 数据加载与序列化函数
@@ -46,7 +45,6 @@ EMPTY_DATA_STRUCTURE = {
 def load_standard_data():
     """尝试加载多月份数据，并设置默认 session state"""
     try:
-        # 使用 'utf-8-sig' 兼容可能存在的 BOM 标记
         with open(DATA_FILE, 'r', encoding='utf-8-sig') as f:
             data = json.load(f)
             
@@ -80,6 +78,7 @@ def serialize_data_for_export():
     data_to_save = {}
     for month, month_data in st.session_state.all_months_data.items():
         data_to_save[month] = month_data.copy()
+        
         # 确保 defaultdict 被转换为标准 dict 才能序列化
         if isinstance(data_to_save[month].get('reasons_data'), defaultdict):
             data_to_save[month]['reasons_data'] = dict(data_to_save[month]['reasons_data'])
@@ -94,23 +93,6 @@ def serialize_data_for_export():
                           data_to_save[month]['reasons_data'][stage_key][city_key] = dict(data_to_save[month]['reasons_data'][stage_key][city_key])
 
     return json.dumps(data_to_save, ensure_ascii=False, indent=4)
-
-# 写入文件函数 (用于集中保存)
-def save_all_data_to_file():
-    """将 Session State 中的所有月份数据写入 JSON 文件"""
-    data_to_save = st.session_state.all_months_data
-    file_path = DATA_FILE
-    
-    try:
-        with open(file_path, 'w', encoding='utf-8') as f:
-            json_output = serialize_data_for_export()
-            f.write(json_output)
-        
-        st.success("🎉 数据已成功保存！")
-        return True
-    except Exception as e:
-        st.error(f"保存数据到文件时发生错误: {e}")
-        return False
 
 # 应用启动时，立即加载数据
 if 'all_months_data' not in st.session_state:
@@ -134,7 +116,6 @@ def create_reason_inputs(current_data, stage_key, stage_title, reason_count=4):
         label = label_cols[i].text_input(
             f"原因 {i+1} 名称", 
             value=current_default_labels[i] if len(current_default_labels) > i else '',
-            # 修正 key 确保唯一性
             key=f"label_{current_data['month']}_{stage_key}_{i}"
         )
         current_labels.append(label)
@@ -170,13 +151,7 @@ def create_reason_inputs(current_data, stage_key, stage_title, reason_count=4):
         
     current_data['reasons_data'][stage_key] = dict(new_reason_data_for_stage)
 
-# [省略所有图表函数，与上次代码完全一致]
-# ... 保持 create_beautiful_funnel, create_horizontal_funnel, create_simple_reason_chart, 
-# create_pie_chart_for_reason, create_creative_funnel 与上次代码一致，此处不再重复贴出 ...
-
-# ---------------------------------------------------------------------------------------------------
-# 重新引入图表函数 (必须包含，以保证代码完整性)
-# ---------------------------------------------------------------------------------------------------
+# --- [所有图表函数保持不变] ---
 
 def create_beautiful_funnel(city_data, city_name, stages):
     values = city_data
@@ -300,14 +275,11 @@ def create_creative_funnel(creative_data, creative_name):
         margin=dict(t=60, b=40, l=60, r=40), showlegend=False
     )
     return fig
-# ---------------------------------------------------------------------------------------------------
+
+# --- [图表函数结束] ---
 
 
-# [省略 generate_sales_charts 和 generate_creative_charts 函数，与上次代码完全一致]
-# ... 保持 generate_sales_charts 和 generate_creative_charts 函数与上次代码一致，此处不再重复贴出 ...
-# ---------------------------------------------------------------------------------------------------
-# 重新引入 generate_sales_charts (必须包含，以保证代码完整性)
-# ---------------------------------------------------------------------------------------------------
+# --- [generate_sales_charts 和 generate_creative_charts 保持不变] ---
 
 def generate_sales_charts(current_data):
     cities_data = current_data['cities_data']
@@ -486,7 +458,8 @@ def generate_creative_charts(current_data):
     for i, row in df.iterrows():
         with funnel_cols[i % cols_per_row]:
             st.plotly_chart(create_creative_funnel(row, row['Creative Name']), use_container_width=True)
-# ---------------------------------------------------------------------------------------------------
+
+# --- [generate_sales_charts 和 generate_creative_charts 结束] ---
 
 
 # ==================== 5. 侧边栏及主应用入口 ====================
@@ -502,7 +475,7 @@ st.session_state.current_month = current_month
 current_data = st.session_state.all_months_data[current_month]
 current_data['month'] = current_month 
 
-# 2. 侧边栏 - 数据输入 UI (恢复)
+# 2. 侧边栏 - 数据输入 UI
 st.sidebar.header(f"📊 {current_month}核心数据输入")
 current_data['cost_per_lead'] = st.sidebar.number_input(
     "单条线索成本(元)", 
@@ -540,7 +513,7 @@ with st.sidebar.expander(f"🔍 {current_month}流失原因数据", expanded=Fal
 
 # 添加新月份功能
 st.sidebar.markdown("---")
-new_month = st.sidebar.text_input("新增月份名称 (例如：December)", key="new_month_input") # 示例月份改为 December
+new_month = st.sidebar.text_input("新增月份名称 (例如：December)", key="new_month_input")
 if st.sidebar.button("➕ 创建新月份数据"):
     if new_month and new_month not in st.session_state.all_months_data:
         new_data = {
@@ -552,12 +525,8 @@ if st.sidebar.button("➕ 创建新月份数据"):
         }
         st.session_state.all_months_data[new_month] = new_data
         
-        # 立即尝试保存文件
-        if save_all_data_to_file():
-            st.rerun() 
-        else:
-            # 如果保存失败，仍尝试重新运行，让用户手动保存
-            st.rerun() 
+        # 强制重新运行以加载新月份 (不需要保存文件，因为是手动流程)
+        st.rerun() 
 
 # 6. 主应用入口 (集成标签页)
 
@@ -575,73 +544,47 @@ with creative_tab:
     
 with edit_tab:
     st.header(f"⚙️ {current_month} - 广告素材数据编辑")
-    st.warning("请在下方的文本框中输入/粘贴数据。数据格式为 **JSON 数组** 或 **DataFrame 的 to_json() 输出**，字段名需与标准一致。")
+    st.warning("您可以在表格中直接编辑数据，更改将实时更新内存中的图表。")
     
-    # 将当前数据转换为可读的 JSON 字符串
-    initial_json_str = json.dumps(current_data.get('creatives_data', []), ensure_ascii=False, indent=4)
+    creative_df = pd.DataFrame(current_data.get('creatives_data', []))
     
-    # 使用 st.text_area 替代 st.data_editor
-    json_input = st.text_area(
-        "输入/粘贴广告素材数据 (JSON 格式)",
-        value=initial_json_str,
-        height=400,
-        key=f"{current_month}_creative_data_input"
+    column_config = {
+        "Creative Name": st.column_config.TextColumn("素材简称", required=True),
+        "Creative ID": st.column_config.TextColumn("素材ID", required=True),
+        "Link": st.column_config.TextColumn("素材链接"),
+        "Cost": st.column_config.NumberColumn("总成本", min_value=0, format="¥%d"),
+        "Leads": st.column_config.NumberColumn("线索量", min_value=0),
+        "Valid Leads": st.column_config.NumberColumn("有效线索", min_value=0),
+        "Clients": st.column_config.NumberColumn("客户数", min_value=0),
+        "Visits": st.column_config.NumberColumn("到访数", min_value=0),
+        "Deals": st.column_config.NumberColumn("成交数", min_value=0)
+    }
+
+    # 使用 st.data_editor 恢复互动编辑
+    edited_df = st.data_editor(
+        creative_df,
+        column_config=column_config,
+        num_rows="dynamic", 
+        use_container_width=True,
+        key=f"{current_month}_creative_editor"
     )
-    
-    # 尝试解析并更新 Session State 中的数据 (但不会写入文件)
-    try:
-        # 清理用户输入的潜在错误（如多余的换行符）
-        cleaned_input = json_input.strip()
-        new_creative_data = json.loads(cleaned_input)
-        
-        # 确保解析出来的是一个列表
-        if isinstance(new_creative_data, list):
-            # 校验和清理数据
-            validated_data = []
-            for item in new_creative_data:
-                if isinstance(item, dict):
-                    # 确保数字字段被正确转换
-                    for key in ["Cost", "Leads", "Valid Leads", "Clients", "Visits", "Deals"]:
-                        try:
-                            item[key] = int(float(item.get(key, 0)))
-                        except:
-                            item[key] = 0
-                    validated_data.append(item)
-            
-            # 临时将编辑后的数据存入 session state，等待用户点击总保存按钮
-            current_data['creatives_data'] = validated_data
-            st.success("数据已在内存中更新。请点击侧边栏的 **'💾 保存所有更改'** 按钮以保存到文件。")
 
-        else:
-            st.warning("输入格式不正确，需要是 JSON 数组 (例如：[{}, {}])。")
-            
-    except json.JSONDecodeError:
-        st.error("无法解析您输入的 JSON 数据。请检查格式是否有误（例如缺少引号、逗号）。")
-        
-    except Exception as e:
-        st.error(f"处理数据时发生未知错误: {e}")
-        
+    # 检查是否有编辑变动并更新 Session State
+    if not edited_df.equals(creative_df):
+        new_creative_data = edited_df.to_dict('records')
+        current_data['creatives_data'] = new_creative_data
+        # 仅更新内存，不保存，不rerun
 
-# 7. 集中保存按钮和开发者面板
+# 7. 开发者面板 - 核心：生成 JSON 数据
 
 st.sidebar.markdown("---")
-# 集中保存按钮
-if st.sidebar.button("💾 保存所有更改", type="primary"):
-    if save_all_data_to_file():
-        # 成功保存后，强制重新运行以更新所有图表
-        st.rerun() 
-    else:
-        # 保存失败，也重新运行以显示最新的错误和状态
-        st.rerun() 
-    
+st.sidebar.header("💾 手动数据持久化")
+st.sidebar.info("请在完成所有编辑后，点击下方按钮生成 JSON 代码，并手动复制到您的 `standard_data.json` 文件中。")
 
-st.sidebar.markdown("---")
-st.sidebar.header("🔑 开发者数据导出")
-st.sidebar.info("此功能用于查看和备份当前应用的 **完整 JSON 数据结构**。")
-
-if st.sidebar.button("✨ 生成 standard_data.json 内容", type="secondary"):
+# 关键按钮：生成 JSON
+if st.sidebar.button("✨ 生成最新的 JSON 数据", type="primary"):
     json_output = serialize_data_for_export()
     
-    st.header("📋 请复制以下 JSON 内容")
+    st.header("📋 请复制以下 JSON 内容（替换 standard_data.json 文件）")
     st.code(json_output, language='json', height=500)
-    st.toast("JSON 内容已生成在主页面！", icon='🎉')
+    st.toast("JSON 内容已在主页面生成！", icon='🎉')
