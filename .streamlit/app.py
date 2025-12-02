@@ -10,7 +10,7 @@ import numpy as np
 
 # 网页标题和配置
 st.set_page_config(page_title="本月销售数据分析系统", layout="wide")
-st.title("🎯 本月销售与广告数据分析系统")
+st.title("🎯 本月销售与广告数据分析系统") # 标题更新
 
 # 定义数据文件路径
 DATA_FILE = 'standard_data.json'
@@ -21,7 +21,7 @@ stages = ['线索量', '接通数', '有效数', '客户数', '到访数', '成�
 # 1. 数据加载与序列化函数
 # =======================================================
 
-# 默认空数据结构 (更新 creatives_data 字段)
+# 默认空数据结构 (新增 creatives_data)
 EMPTY_DATA_STRUCTURE = {
     'cities_data': {city: [0]*6 for city in cities},
     'reason_labels': {
@@ -33,9 +33,9 @@ EMPTY_DATA_STRUCTURE = {
     },
     'reasons_data': defaultdict(dict),
     'cost_per_lead': 320,
-    # 更新默认素材数据结构：ID 拆分为 Creative Name 和 Creative ID
+    # 新增默认素材数据结构
     'creatives_data': [
-        {"Creative Name": "Default_1", "Creative ID": "A001", "Cost": 0, "Leads": 0, "Valid Leads": 0, "Clients": 0, "Visits": 0, "Deals": 0}
+        {"ID": "A_Default", "Cost": 0, "Leads": 0, "Valid Leads": 0, "Clients": 0, "Visits": 0, "Deals": 0}
     ]
 }
 
@@ -45,25 +45,10 @@ def load_standard_data():
     try:
         with open(DATA_FILE, 'r', encoding='utf-8') as f:
             data = json.load(f)
-            # 确保每个月份都有 creatives_data 字段，并兼容旧的 'ID' 字段
+            # 确保每个月份都有 creatives_data 字段，否则用默认值填充
             for month in data:
                 if 'creatives_data' not in data[month]:
                     data[month]['creatives_data'] = EMPTY_DATA_STRUCTURE['creatives_data']
-                else:
-                    # 兼容性处理：如果数据中只有旧的 'ID' 字段，将其拆分为新的两个字段
-                    for creative in data[month]['creatives_data']:
-                        if 'Creative Name' not in creative and 'ID' in creative:
-                            name, id_val = creative['ID'], creative['ID'] # 简单处理：名称和ID初始都等于旧ID
-                            if '_' in creative['ID']: # 尝试按约定格式拆分
-                                parts = creative['ID'].split('_', 1)
-                                name, id_val = parts[0], parts[1]
-                            creative['Creative Name'] = name
-                            creative['Creative ID'] = id_val
-                            del creative['ID']
-                        # 确保所有必需的新字段存在
-                        if 'Creative Name' not in creative: creative['Creative Name'] = 'Unknown'
-                        if 'Creative ID' not in creative: creative['Creative ID'] = 'Unknown'
-                            
             st.session_state.all_months_data = data
             st.sidebar.success("✅ 已加载多月份标准数据。")
     except FileNotFoundError:
@@ -76,9 +61,10 @@ def load_standard_data():
 def serialize_data_for_export():
     """将当前的 session state 中的所有月份数据整理成 JSON 格式"""
     
+    # 确保 reasons_data 从 defaultdict 转换为标准 dict
     data_to_save = {}
     for month, month_data in st.session_state.all_months_data.items():
-        data_to_save[month] = month_data.copy()
+        data_to_save[month] = month_data.copy() # 复制以避免修改 session state
         if isinstance(data_to_save[month].get('reasons_data'), defaultdict):
             data_to_save[month]['reasons_data'] = dict(data_to_save[month]['reasons_data'])
 
@@ -90,7 +76,7 @@ if 'all_months_data' not in st.session_state:
 
 # ==================== 2. 核心函数定义 (图表和原因输入) ====================
 
-# 未转化原因数据输入互动化函数 (保持不变)
+# 未转化原因数据输入互动化函数
 def create_reason_inputs(current_data, stage_key, stage_title, reason_count=4):
     """创建互动式的流失原因标签和数量输入"""
     
@@ -107,8 +93,7 @@ def create_reason_inputs(current_data, stage_key, stage_title, reason_count=4):
         label = label_cols[i].text_input(
             f"原因 {i+1} 名称", 
             value=current_default_labels[i] if len(current_default_labels) > i else '',
-            # 修正 key 确保唯一性
-            key=f"label_{current_data['month']}_{stage_key}_{i}"
+            key=f"label_{current_data['month']}_{stage_key}_{i}" # 键名加入月份，保证唯一
         )
         current_labels.append(label)
     current_data['reason_labels'][stage_key] = current_labels 
@@ -132,8 +117,7 @@ def create_reason_inputs(current_data, stage_key, stage_title, reason_count=4):
             value = cols[i].number_input(
                 f"{label} ({city})", 
                 value=initial_value, 
-                # 修正 key 确保唯一性
-                key=f"{current_data['month']}_{stage_key}_{city}_{i}",
+                key=f"{current_data['month']}_{stage_key}_{city}_{i}", # 键名加入月份
                 min_value=0,
                 label_visibility="collapsed" 
             )
@@ -144,7 +128,7 @@ def create_reason_inputs(current_data, stage_key, stage_title, reason_count=4):
         
     current_data['reasons_data'][stage_key] = new_reason_data_for_stage
 
-# Plotly 图表函数 (销售部分，保持不变)
+# Plotly 图表函数 (漏斗图)
 def create_beautiful_funnel(city_data, city_name, stages):
     """创建美观的垂直漏斗图"""
     values = city_data
@@ -172,7 +156,26 @@ def create_beautiful_funnel(city_data, city_name, stages):
     )
     return fig
 
-# Plotly 图表函数 (流失原因柱状图和饼图, 保持不变)
+def create_horizontal_funnel(city_data, city_name, stages):
+    """创建水平漏斗图"""
+    values = city_data
+    horizontal_colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFD700', '#DDA0DD']
+    valid_values = [v if v > 0 else 0.1 for v in values] 
+    
+    fig = go.Figure(go.Funnel(
+        y=stages, x=valid_values, orientation="h", textposition="inside", textinfo="value+percent initial",
+        textfont=dict(size=11, color="white", weight="bold"),
+        marker=dict(color=horizontal_colors[:len(values)], line=dict(width=2, color="white")),
+        opacity=0.9
+    ))
+    fig.update_layout(
+        title={'text': f"<b>{city_name}水平视图</b>",'x': 0.5, 'xanchor': 'center', 'font': {'size': 14, 'color': '#2C3E50'}},
+        plot_bgcolor='rgba(248,248,248,0.8)', paper_bgcolor='white', height=400,
+        margin=dict(t=50, b=40, l=80, r=40)
+    )
+    return fig
+
+# Plotly 图表函数 (流失原因柱状图)
 def create_simple_reason_chart(reasons_data_for_stage, title, cities):
     """创建多城市流失原因柱状图分析，显示0值的原因名称"""
     
@@ -204,6 +207,7 @@ def create_simple_reason_chart(reasons_data_for_stage, title, cities):
     fig.update_layout(height=rows_count * 400, showlegend=False, title_text=f"<b>{title}分析</b>", title_x=0.5)
     return fig
 
+# Plotly 图表函数 (流失原因饼图)
 def create_pie_chart_for_reason(reasons_data_for_stage, title, cities):
     """创建多城市流失原因饼图分析"""
     
@@ -232,34 +236,9 @@ def create_pie_chart_for_reason(reasons_data_for_stage, title, cities):
     fig.update_layout(height=rows_count * 400, showlegend=False, title_text=f"<b>{title}占比分析</b>", title_x=0.5)
     return fig
 
-# 新增：素材漏斗图创建函数
-def create_creative_funnel(creative_data, creative_name):
-    """创建素材转化漏斗图"""
-    stages_names = ["线索量", "有效线索", "客户数", "到访数", "成交数"]
-    values = [
-        creative_data['Leads'], creative_data['Valid Leads'], 
-        creative_data['Clients'], creative_data['Visits'], creative_data['Deals']
-    ]
-    
-    colors = px.colors.sequential.Plasma_r[:len(values)]
-    text_colors = ["white"] * 3 + ["black"] * 2
-    
-    fig = go.Figure(go.Funnel(
-        y=stages_names, x=values, textposition="inside", textinfo="value+percent initial",
-        textfont=dict(size=12, color=text_colors, weight="bold"),
-        marker=dict(color=colors, line=dict(width=2, color="darkgray")),
-        connector=dict(line=dict(color="rgba(128,128,128,0.5)", width=2, dash="dot")),
-        opacity=0.85
-    ))
-    fig.update_layout(
-        title={'text': f"<b>{creative_name} 转化漏斗</b>",'x': 0.5, 'xanchor': 'center','font': {'size': 16, 'color': '#2C3E50'}},
-        plot_bgcolor='rgba(248,248,248,0.8)', paper_bgcolor='white', font=dict(size=11), height=450,
-        margin=dict(t=60, b=40, l=60, r=40), showlegend=False
-    )
-    return fig
 
 # =======================================================
-# 3. 销售数据总览看板函数 (保持不变)
+# 3. 销售数据总览看板函数
 # =======================================================
 
 def generate_sales_charts(current_data):
@@ -374,13 +353,10 @@ def generate_sales_charts(current_data):
             for i, city in enumerate(group):
                 city_data = cities_data.get(city, [0]*6)
                 with cols[i]:
-                    # create_horizontal_funnel 函数未给出，这里仅调用垂直图
-                    # fig_h = create_horizontal_funnel(city_data, city, stages)
-                    # 避免报错，使用垂直图替代
-                    fig_h = create_beautiful_funnel(city_data, city, stages) 
+                    fig_h = create_horizontal_funnel(city_data, city, stages)
                     st.plotly_chart(fig_h, use_container_width=True)
     
-    # ------------------- 未转化客户深度分析 (流失原因图表) -------------------
+    # ------------------- 未转化客户深度分析 - 柱状图 -------------------
     st.header("🔍 未转化客户深度分析 - 柱状图")
     reason_tab_bar1, reason_tab_bar2, reason_tab_bar3, reason_tab_bar4, reason_tab_bar5 = st.tabs([
         "❌ 无效线索原因", "📞 未转化线索原因", "👥 未转化客户原因", "🚫 未到访原因", "💸 未成交原因"
@@ -406,6 +382,7 @@ def generate_sales_charts(current_data):
         fig_not_deal_bar = create_simple_reason_chart(reasons_data['not_deal'], "未成交原因", cities)
         st.plotly_chart(fig_not_deal_bar, use_container_width=True)
 
+    # ------------------- 未转化客户深度分析 - 饼图 -------------------
     st.header("🥧 未转化客户深度分析 - 饼图")
     pie_tab1, pie_tab2, pie_tab3, pie_tab4, pie_tab5 = st.tabs([
         "❌ 无效线索**原因分布**", "📞 未转化线索**原因分布**", "👥 未转化客户**原因分布**", "🚫 未到访**原因分布**", "💸 未成交**原因分布**"
@@ -433,7 +410,7 @@ def generate_sales_charts(current_data):
 
 
 # =======================================================
-# 4. 广告素材分析看板函数 (已检查内部没有使用 st. 组件)
+# 4. 广告素材分析看板函数 (中文汉化和新增指标)
 # =======================================================
 
 def generate_creative_charts(current_data):
@@ -447,19 +424,16 @@ def generate_creative_charts(current_data):
     df = pd.DataFrame(creatives_data)
 
     # 确保列名是可用的
-    required_cols = ["Creative Name", "Creative ID", "Cost", "Leads", "Valid Leads", "Clients", "Visits", "Deals"]
+    required_cols = ["ID", "Cost", "Leads", "Valid Leads", "Clients", "Visits", "Deals"]
     for col in required_cols:
         if col not in df.columns:
-            st.error(f"数据中缺少必需的列: {col}，请检查数据结构。")
+            st.error(f"数据中缺少必需的列: {col}")
             return
             
     # 计算核心指标
     df['CPL'] = df['Cost'] / df['Leads'].replace(0, np.nan)
     df['Valid CPL'] = df['Cost'] / df['Valid Leads'].replace(0, np.nan)
     df['Client CPL'] = df['Cost'] / df['Clients'].replace(0, np.nan)
-    df['Visit CPL'] = df['Cost'] / df['Visits'].replace(0, np.nan) 
-    df['Deal CPL'] = df['Cost'] / df['Deals'].replace(0, np.nan) 
-    
     df['Valid Rate'] = (df['Valid Leads'] / df['Leads'].replace(0, np.nan)) * 100
     df['Client Rate'] = (df['Clients'] / df['Valid Leads'].replace(0, np.nan)) * 100
     df['Visit Rate'] = (df['Visits'] / df['Clients'].replace(0, np.nan)) * 100 
@@ -467,8 +441,7 @@ def generate_creative_charts(current_data):
     
     # 核心指标中文映射
     metric_map = {
-        'Creative Name': '素材简称',
-        'Creative ID': '素材ID',
+        'ID': '素材ID',
         'Cost': '总成本',
         'Leads': '线索量',
         'Valid Leads': '有效线索',
@@ -478,8 +451,6 @@ def generate_creative_charts(current_data):
         'CPL': '线索成本 (CPL)',
         'Valid CPL': '有效线索成本',
         'Client CPL': '客户获取成本',
-        'Visit CPL': '到访成本',
-        'Deal CPL': '成交成本',
         'Valid Rate': '线索有效率',
         'Client Rate': '有效线索转化率',
         'Visit Rate': '客户到访率', 
@@ -492,8 +463,6 @@ def generate_creative_charts(current_data):
         'CPL': '¥{:,.0f}'.format,
         'Valid CPL': '¥{:,.0f}'.format,
         'Client CPL': '¥{:,.0f}'.format,
-        'Visit CPL': '¥{:,.0f}'.format,
-        'Deal CPL': '¥{:,.0f}'.format,
         'Valid Rate': '{:.1f}%'.format,
         'Client Rate': '{:.1f}%'.format,
         'Visit Rate': '{:.1f}%'.format, 
@@ -504,9 +473,8 @@ def generate_creative_charts(current_data):
     st.subheader("核心指标数据表")
     display_df = df.copy()
     
-    cols_to_display = ["Creative Name", "Creative ID", "Cost", "Leads", "Valid Leads", "Clients", "Visits", "Deals", 
-                       "Valid Rate", "Client Rate", "Visit Rate", "Deal Rate", 
-                       "CPL", "Valid CPL", "Client CPL", "Visit CPL", "Deal CPL"]
+    cols_to_display = ["ID", "Cost", "Leads", "Valid Leads", "Clients", "Visits", "Deals", 
+                       "Valid Rate", "Client Rate", "Visit Rate", "Deal Rate", "CPL", "Valid CPL", "Client CPL"] 
 
     # 应用格式化
     for col, func in format_mapping.items():
@@ -518,59 +486,37 @@ def generate_creative_charts(current_data):
     
     st.dataframe(display_df, use_container_width=True)
 
-    # 2. 成本指标对比图
-    st.header("📊 素材成本指标对比")
-    cost_metrics = ['CPL', 'Valid CPL', 'Client CPL', 'Visit CPL', 'Deal CPL']
-    
-    df_cost_melt = df.melt(
-        id_vars='Creative Name',
-        value_vars=cost_metrics,
-        var_name='成本类型',
-        value_name='成本金额'
-    ).dropna(subset=['成本金额']) 
+    # 2. 效果对比图
+    st.subheader("素材效果对比 (按线索量和成本)")
+    col1, col2 = st.columns(2)
 
-    df_cost_melt['成本类型'] = df_cost_melt['成本类型'].map(metric_map)
+    with col1:
+        # 线索量对比 (Leads)
+        fig_leads = px.bar(df, x='ID', y='Leads', title='各素材线索量',
+                           color='Leads', color_continuous_scale='Sunsetdark')
+        fig_leads.update_layout(height=400, xaxis_title=metric_map['ID'], yaxis_title=metric_map['Leads'])
+        st.plotly_chart(fig_leads, use_container_width=True)
 
-    fig_costs = px.bar(
-        df_cost_melt,
-        x='Creative Name',
-        y='成本金额',
-        color='成本类型',
-        barmode='group',
-        text='成本金额',
-        title='各素材分阶段成本对比',
-        color_discrete_map={
-            metric_map['CPL']: '#00bfa5',
-            metric_map['Valid CPL']: '#4E79A7',
-            metric_map['Client CPL']: '#E15759',
-            metric_map['Visit CPL']: '#F28E2B',
-            metric_map['Deal CPL']: '#76B7B2',
-        }
-    )
-    
-    fig_costs.update_traces(texttemplate='¥%{text:,.0f}', textposition='outside')
-    fig_costs.update_layout(
-        height=500,
-        xaxis_title=metric_map['Creative Name'],
-        yaxis_title="成本金额 (元)",
-        uniformtext_minsize=8, 
-        uniformtext_mode='hide',
-        legend_title_text='成本类型'
-    )
-    st.plotly_chart(fig_costs, use_container_width=True)
-
-
-    # 3. 转化率对比图 
+    with col2:
+        # 有效线索成本对比 (Valid CPL)
+        fig_cpl = px.bar(df, x='ID', y='Valid CPL', title='各素材有效线索成本',
+                         color='Valid CPL', color_continuous_scale='Viridis',
+                         labels={'Valid CPL': metric_map['Valid CPL']})
+        fig_cpl.update_layout(height=400, xaxis_title=metric_map['ID'], yaxis_title=metric_map['Valid CPL'])
+        st.plotly_chart(fig_cpl, use_container_width=True)
+        
+    # 3. 转化率对比图
     st.subheader("转化率对比")
     
-    df_melt_rate = df[['Creative Name', 'Valid Rate', 'Client Rate', 'Visit Rate', 'Deal Rate']].rename(columns=metric_map).melt(
-        id_vars=metric_map['Creative Name'], 
+    # 使用中文指标名称进行 melt
+    df_melt = df[['ID', 'Valid Rate', 'Client Rate', 'Visit Rate', 'Deal Rate']].rename(columns=metric_map).melt(
+        id_vars=metric_map['ID'], 
         value_vars=[metric_map['Valid Rate'], metric_map['Client Rate'], metric_map['Visit Rate'], metric_map['Deal Rate']],
         var_name='指标', 
         value_name='百分比'
     )
                       
-    fig_rate = px.bar(df_melt_rate, x=metric_map['Creative Name'], y='百分比', color='指标', barmode='group',
+    fig_rate = px.bar(df_melt, x=metric_map['ID'], y='百分比', color='指标', barmode='group',
                       title='各环节转化率对比',
                       color_discrete_map={
                           metric_map['Valid Rate']: '#1E88E5', 
@@ -578,46 +524,24 @@ def generate_creative_charts(current_data):
                           metric_map['Visit Rate']: '#009688', 
                           metric_map['Deal Rate']: '#9C27B0' 
                       })
-    fig_rate.update_layout(height=450, yaxis_title="转化率 (%)", xaxis_title=metric_map['Creative Name'])
+    fig_rate.update_layout(height=450, yaxis_title="转化率 (%)")
     st.plotly_chart(fig_rate, use_container_width=True)
 
 
-    # 4. 每个素材的漏斗图
-    st.header("🎯 单素材转化漏斗分析")
-    
-    num_creatives = len(df)
-    cols_per_row = 3
-    
-    # 使用 Streamlit 的列布局来放置漏斗图
-    # 注意：这里不再需要手动计算行数，Streamlit 的列对象会循环使用
-    funnel_cols = st.columns(cols_per_row)
-    
-    for i, row in df.iterrows():
-        creative_name = row['Creative Name']
-        
-        # 确定当前素材在哪一列
-        col_index = i % cols_per_row
-        
-        with funnel_cols[col_index]:
-            fig_funnel = create_creative_funnel(row, creative_name)
-            st.plotly_chart(fig_funnel, use_container_width=True)
-
-
-# ==================== 5. 侧边栏及主应用入口 (已检查 Key) ====================
+# ==================== 5. 侧边栏及主应用入口 (集成标签页) ====================
 
 # 1. 侧边栏：定义当前月份和添加新月份
 st.sidebar.markdown("---")
 st.sidebar.header("🗓️ 月份管理")
 
 available_months = sorted(st.session_state.all_months_data.keys(), reverse=True)
-# key 确保唯一
-current_month = st.sidebar.radio("选择/编辑月份:", available_months, key="month_selector_sidebar") 
+current_month = st.sidebar.radio("选择/编辑月份:", available_months, key="month_selector")
 st.session_state.current_month = current_month
 
 current_data = st.session_state.all_months_data[current_month]
 current_data['month'] = current_month # 注入月份名，用于 key
 
-# 2. 侧边栏 - 数据输入 UI 
+# 2. 侧边栏 - 数据输入 UI (使用当前月份的数据)
 st.sidebar.header(f"📊 {current_month}核心数据输入")
 current_data['cost_per_lead'] = st.sidebar.number_input(
     "单条线索成本(元)", 
@@ -639,14 +563,12 @@ with st.sidebar.expander(f"🏙️ {current_month}城市转化数据", expanded=
             value = cols[col_idx].number_input(
                 f"{stage}",
                 value=initial_value,
-                # key 确保唯一：月份_城市_阶段
-                key=f"{current_month}_{city}_{stage}", 
+                key=f"{current_month}_{city}_{stage}", # 键名加入月份
                 min_value=0
             )
             values.append(value)
         current_data['cities_data'][city] = values
         
-# 流失原因输入
 with st.sidebar.expander(f"🔍 {current_month}流失原因数据", expanded=False):
     create_reason_inputs(current_data, 'invalid', "❌ 无效线索原因", reason_count=4)
     create_reason_inputs(current_data, 'not_converted', "📞 未转化线索原因", reason_count=4)
@@ -656,25 +578,25 @@ with st.sidebar.expander(f"🔍 {current_month}流失原因数据", expanded=Fal
 
 # 添加新月份功能
 st.sidebar.markdown("---")
-# key 确保唯一
-new_month = st.sidebar.text_input("新增月份名称 (例如：November)", key="new_month_input") 
+new_month = st.sidebar.text_input("新增月份名称 (例如：November)")
 if st.sidebar.button("➕ 创建新月份数据"):
     if new_month and new_month not in st.session_state.all_months_data:
+        # 使用深拷贝创建一套全新的默认数据
         new_data = {
             'cities_data': {city: [0]*6 for city in cities},
             'reason_labels': {k: list(v) for k, v in EMPTY_DATA_STRUCTURE['reason_labels'].items()},
             'reasons_data': defaultdict(dict),
-            'cost_per_lead': current_data.get('cost_per_lead', 320),
-            'creatives_data': EMPTY_DATA_STRUCTURE['creatives_data']
+            'cost_per_lead': current_data.get('cost_per_lead', 320), # 继承当前成本
+            'creatives_data': EMPTY_DATA_STRUCTURE['creatives_data'] # 继承默认素材数据结构
         }
         st.session_state.all_months_data[new_month] = new_data
-        st.experimental_rerun()
+        st.experimental_rerun() # 重新运行应用，加载新月份
 
 # 6. 主应用入口 (集成标签页)
 sales_tab, creative_tab, edit_tab = st.tabs([
     "💰 销售数据总览", 
     "🖼️ 广告素材效果分析",
-    "⚙️ 数据编辑"
+    "⚙️ 数据编辑" # 新增数据编辑标签页
 ])
 
 with sales_tab:
@@ -683,17 +605,16 @@ with sales_tab:
 with creative_tab:
     generate_creative_charts(current_data)
     
-with edit_tab: # 数据编辑标签页 
+with edit_tab: # 新增编辑标签页的内容
     st.header(f"⚙️ {current_month} - 广告素材数据编辑")
     st.warning("请在此处编辑、添加或删除广告素材的数据。编辑完成后，数据会自动更新到分析页面。")
     
-    # 广告素材数据输入
+    # 广告素材数据输入 (原侧边栏代码，现移到主页)
     df_creatives = pd.DataFrame(current_data.get('creatives_data', EMPTY_DATA_STRUCTURE['creatives_data']))
     
-    # 定义可编辑的列类型 
+    # 定义可编辑的列类型 (中文标题)
     column_config = {
-        "Creative Name": st.column_config.TextColumn("素材简称", required=True),
-        "Creative ID": st.column_config.TextColumn("素材ID", required=True),
+        "ID": st.column_config.TextColumn("素材ID", required=True),
         "Cost": st.column_config.NumberColumn("成本 (¥)", required=True, min_value=0),
         "Leads": st.column_config.NumberColumn("线索量", required=True, min_value=0),
         "Valid Leads": st.column_config.NumberColumn("有效线索", required=True, min_value=0),
@@ -701,24 +622,19 @@ with edit_tab: # 数据编辑标签页
         "Visits": st.column_config.NumberColumn("到访数", required=True, min_value=0),
         "Deals": st.column_config.NumberColumn("成交数", required=True, min_value=0),
     }
-    
-    display_cols = ["Creative Name", "Creative ID", "Cost", "Leads", "Valid Leads", "Clients", "Visits", "Deals"]
-    
-    if 'ID' in df_creatives.columns:
-        df_creatives = df_creatives.drop(columns=['ID'])
 
     edited_df = st.data_editor(
-        df_creatives[display_cols],
+        df_creatives,
         column_config=column_config,
         num_rows="dynamic",
         use_container_width=True,
-        # key 确保唯一：月份_data_editor_main
-        key=f"{current_month}_creative_data_editor_main" 
+        key=f"{current_month}_creative_data_editor_main" # Key 更新
     )
     
+    # 将编辑后的 DataFrame 转换回 list of dicts 存入 current_data
     current_data['creatives_data'] = edited_df.to_dict('records')
     
-# 7. 导出面板 (导出所有月份数据) 
+# 7. 导出面板 (导出所有月份数据)
 st.sidebar.markdown("---")
 st.sidebar.header("🔑 开发者数据导出")
 st.sidebar.info("请在修改数据或标签后，点击此按钮，复制 **所有月份** 的 JSON 内容用于更新 GitHub 上的 `standard_data.json` 文件。")
