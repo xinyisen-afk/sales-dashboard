@@ -236,6 +236,36 @@
                 }
             }
         },
-        "cost_per_lead": 320
+        "cost_per_lead": 320,
+        
+        "creatives_data": [
+            {
+                "ID": "A1_跑量爆款",
+                "Cost": 15000,
+                "Leads": 40,
+                "Valid Leads": 35,
+                "Clients": 25,
+                "Visits": 10,
+                "Deals": 2
+            },
+            {
+                "ID": "B2_新品推广",
+                "Cost": 8000,
+                "Leads": 25,
+                "Valid Leads": 20,
+                "Clients": 15,
+                "Visits": 5,
+                "Deals": 1
+            },
+            {
+                "ID": "C3_品牌宣传",
+                "Cost": 5000,
+                "Leads": 10,
+                "Valid Leads": 8,
+                "Clients": 5,
+                "Visits": 2,
+                "Deals": 0
+            }
+        ]
     }
 }
