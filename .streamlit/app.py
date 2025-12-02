@@ -17,6 +17,9 @@ DATA_FILE = 'standard_data.json'
 cities = ['从化', '中山', '江门', '南沙二园', '佛山']
 stages = ['线索量', '接通数', '有效数', '客户数', '到访数', '成交数']
 
+# **修正默认月份为 'November'**
+DEFAULT_MONTH = "November"
+
 # =======================================================
 # 1. 数据加载与序列化函数
 # =======================================================
@@ -60,21 +63,25 @@ def load_standard_data():
                                 name, id_val = parts[0], parts[1]
                             creative['Creative Name'] = name
                             creative['Creative ID'] = id_val
-                            del creative['ID']
+                            # 如果旧的 ID 字段存在，则删除它，避免混淆
+                            if 'ID' in creative:
+                                del creative['ID']
                             
                         # 确保所有必需的新字段存在
                         if 'Creative Name' not in creative: creative['Creative Name'] = 'Unknown'
-                        if 'Creative ID' not in creative: creative['Creative ID'] = creative.get('ID', 'Unknown')
+                        if 'Creative ID' not in creative: creative['Creative ID'] = 'Unknown'
                         if 'Link' not in creative: creative['Link'] = '无链接'
                             
             st.session_state.all_months_data = data
             st.sidebar.success("✅ 已加载多月份标准数据。")
     except FileNotFoundError:
         st.sidebar.error(f"⚠️ 警告：未找到 {DATA_FILE} 文件。创建默认结构。")
-        st.session_state.all_months_data = {"October": EMPTY_DATA_STRUCTURE}
+        # **更新默认加载月份**
+        st.session_state.all_months_data = {DEFAULT_MONTH: EMPTY_DATA_STRUCTURE}
     except json.JSONDecodeError:
         st.sidebar.error(f"⚠️ 警告：{DATA_FILE} 文件格式错误。使用默认结构。")
-        st.session_state.all_months_data = {"October": EMPTY_DATA_STRUCTURE}
+        # **更新默认加载月份**
+        st.session_state.all_months_data = {DEFAULT_MONTH: EMPTY_DATA_STRUCTURE}
 
 def serialize_data_for_export():
     """将当前的 session state 中的所有月份数据整理成 JSON 格式"""
@@ -147,7 +154,7 @@ def create_reason_inputs(current_data, stage_key, stage_title, reason_count=4):
         
     current_data['reasons_data'][stage_key] = new_reason_data_for_stage
 
-# Plotly 图表函数 (销售部分，仅保留垂直漏斗图)
+# Plotly 图表函数 (垂直漏斗图)
 def create_beautiful_funnel(city_data, city_name, stages):
     """创建美观的垂直漏斗图"""
     values = city_data
@@ -260,8 +267,8 @@ def create_creative_funnel(creative_data, creative_name):
     """创建素材转化漏斗图"""
     stages_names = ["线索量", "有效线索", "客户数", "到访数", "成交数"]
     values = [
-        creative_data['Leads'], creative_data['Valid Leads'], 
-        creative_data['Clients'], creative_data['Visits'], creative_data['Deals']
+        creative_data.get('Leads', 0), creative_data.get('Valid Leads', 0), 
+        creative_data.get('Clients', 0), creative_data.get('Visits', 0), creative_data.get('Deals', 0)
     ]
     
     colors = px.colors.sequential.Plasma_r[:len(values)]
@@ -470,8 +477,8 @@ def generate_creative_charts(current_data):
     required_cols = ["Creative Name", "Creative ID", "Link", "Cost", "Leads", "Valid Leads", "Clients", "Visits", "Deals"]
     for col in required_cols:
         if col not in df.columns:
-            st.error(f"数据中缺少必需的列: {col}，请检查数据结构。")
-            return
+            # 尝试给缺失的列一个默认值，以避免计算时崩溃
+            df[col] = 0 if col in ["Cost", "Leads", "Valid Leads", "Clients", "Visits", "Deals"] else 'N/A'
             
     # 计算核心指标 (新增 Visit CPL 和 Deal CPL)
     df['CPL'] = df['Cost'] / df['Leads'].replace(0, np.nan)
@@ -679,7 +686,7 @@ with st.sidebar.expander(f"🔍 {current_month}流失原因数据", expanded=Fal
 # 添加新月份功能
 st.sidebar.markdown("---")
 # key 确保唯一
-new_month = st.sidebar.text_input("新增月份名称 (例如：November)", key="new_month_input") 
+new_month = st.sidebar.text_input("新增月份名称 (例如：December)", key="new_month_input") 
 if st.sidebar.button("➕ 创建新月份数据"):
     if new_month and new_month not in st.session_state.all_months_data:
         new_data = {
@@ -713,32 +720,36 @@ with edit_tab: # 数据编辑标签页
     # 确保从 session state 加载最新的数据
     df_creatives = pd.DataFrame(current_data.get('creatives_data', EMPTY_DATA_STRUCTURE['creatives_data']))
     
-    # 定义可编辑的列类型 (更新包含 Creative Name 和 Link)
+    # 定义可编辑的列类型 (更新配置，确保数字和文本输入稳定性)
     column_config = {
         "Creative Name": st.column_config.TextColumn("素材简称", required=True),
         "Creative ID": st.column_config.TextColumn("素材ID", required=True),
-        "Link": st.column_config.TextColumn("素材链接", required=False), # 链接可以不填
-        "Cost": st.column_config.NumberColumn("成本 (¥)", required=True, min_value=0),
-        "Leads": st.column_config.NumberColumn("线索量", required=True, min_value=0),
-        "Valid Leads": st.column_config.NumberColumn("有效线索", required=True, min_value=0),
-        "Clients": st.column_config.NumberColumn("客户数", required=True, min_value=0),
-        "Visits": st.column_config.NumberColumn("到访数", required=True, min_value=0),
-        "Deals": st.column_config.NumberColumn("成交数", required=True, min_value=0),
+        # 优化：使用 LinkColumn 更好支持 URL
+        "Link": st.column_config.LinkColumn("素材链接", required=False, help="素材的 URL 链接", display_text="链接"),
+        # 优化：明确使用 NumberColumn 确保输入稳定
+        "Cost": st.column_config.NumberColumn("成本 (¥)", required=True, min_value=0, format="%.0f"),
+        "Leads": st.column_config.NumberColumn("线索量", required=True, min_value=0, format="%d"),
+        "Valid Leads": st.column_config.NumberColumn("有效线索", required=True, min_value=0, format="%d"),
+        "Clients": st.column_config.NumberColumn("客户数", required=True, min_value=0, format="%d"),
+        "Visits": st.column_config.NumberColumn("到访数", required=True, min_value=0, format="%d"),
+        "Deals": st.column_config.NumberColumn("成交数", required=True, min_value=0, format="%d"),
     }
     
     display_cols = ["Creative Name", "Creative ID", "Link", "Cost", "Leads", "Valid Leads", "Clients", "Visits", "Deals"]
     
-    # 确保只显示我们需要的列
+    # 确保 DataFrame 只有需要的列，并填充缺失值
     if not df_creatives.empty:
-         # 确保 DataFrame 只有需要的列，避免旧数据结构中的冗余列导致问题
-        df_creatives = df_creatives.reindex(columns=display_cols, fill_value='')
+        df_creatives = df_creatives.reindex(columns=display_cols, fill_value=0) # 数量列默认为0
+        df_creatives['Creative Name'] = df_creatives['Creative Name'].replace(0, 'Unknown')
+        df_creatives['Creative ID'] = df_creatives['Creative ID'].replace(0, 'Unknown')
+        df_creatives['Link'] = df_creatives['Link'].replace(0, '无链接')
 
     edited_df = st.data_editor(
         df_creatives,
         column_config=column_config,
         num_rows="dynamic",
         use_container_width=True,
-        # key 确保唯一：月份_data_editor_main
+        # 确保 key 绝对唯一，不依赖任何输入
         key=f"{current_month}_creative_data_editor_main" 
     )
     
