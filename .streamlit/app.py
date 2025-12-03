@@ -18,8 +18,11 @@ DATA_FILE = 'standard_data.json'
 cities = ['从化', '中山', '江门', '南沙二园', '佛山']
 stages = ['线索量', '接通数', '有效数', '客户数', '到访数', '成交数']
 
-# 默认月份 (十一月)
-DEFAULT_MONTH = "November"
+# 1. 修正：默认月份改为中文（假设十月和十一月是您最常用的月份）
+DEFAULT_MONTH_1 = "十一月"
+DEFAULT_MONTH_2 = "十二月"
+DEFAULT_MONTHS_KEYS = [DEFAULT_MONTH_1, DEFAULT_MONTH_2]
+
 
 # =======================================================
 # 1. 数据加载与序列化函数
@@ -66,13 +69,23 @@ def load_standard_data():
             st.sidebar.success("✅ 已加载多月份标准数据。")
     except FileNotFoundError:
         st.sidebar.error(f"⚠️ 警告：未找到 {DATA_FILE} 文件。创建默认结构。")
-        st.session_state.all_months_data = {DEFAULT_MONTH: EMPTY_DATA_STRUCTURE}
+        # 2. 修正：使用中文月份作为默认键
+        st.session_state.all_months_data = {
+            DEFAULT_MONTH_1: EMPTY_DATA_STRUCTURE.copy(),
+            DEFAULT_MONTH_2: EMPTY_DATA_STRUCTURE.copy()
+        }
     except json.JSONDecodeError:
         st.sidebar.error(f"⚠️ 警告：{DATA_FILE} 文件格式错误。使用默认结构。")
-        st.session_state.all_months_data = {DEFAULT_MONTH: EMPTY_DATA_STRUCTURE}
+        st.session_state.all_months_data = {
+            DEFAULT_MONTH_1: EMPTY_DATA_STRUCTURE.copy(),
+            DEFAULT_MONTH_2: EMPTY_DATA_STRUCTURE.copy()
+        }
     except Exception as e:
         st.sidebar.error(f"⚠️ 警告：加载数据时发生未知错误：{e}。使用默认结构。")
-        st.session_state.all_months_data = {DEFAULT_MONTH: EMPTY_DATA_STRUCTURE}
+        st.session_state.all_months_data = {
+            DEFAULT_MONTH_1: EMPTY_DATA_STRUCTURE.copy(),
+            DEFAULT_MONTH_2: EMPTY_DATA_STRUCTURE.copy()
+        }
 
 
 def serialize_data_for_export():
@@ -199,6 +212,7 @@ def create_horizontal_funnel(city_data, city_name, stages):
     )
     return fig
 
+# 3. 修正：保留计数为 0 的原因标签
 def create_simple_reason_chart(reasons_data_for_stage, title, cities):
     cols_count = 3
     rows_count = int(np.ceil(len(cities) / cols_count))
@@ -210,9 +224,14 @@ def create_simple_reason_chart(reasons_data_for_stage, title, cities):
     
     for i, city in enumerate(cities):
         city_data = reasons_data_for_stage.get(city, {})
-        valid_data = {k: v for k, v in city_data.items() if k and v > 0} 
-        reasons = list(valid_data.keys())
-        counts = list(valid_data.values())
+        
+        # 修正逻辑：保留所有标签，零值用 0 显示
+        reasons = []
+        counts = []
+        for k, v in city_data.items():
+            if k: # 排除空标签
+                reasons.append(k)
+                counts.append(int(v) if v is not None else 0)
         
         row_idx = (i // cols_count) + 1
         col_idx = (i % cols_count) + 1
@@ -237,6 +256,7 @@ def create_pie_chart_for_reason(reasons_data_for_stage, title, cities):
     
     for i, city in enumerate(cities):
         city_data = reasons_data_for_stage.get(city, {})
+        # 饼图必须过滤掉 0 值，否则 Plotly 会报错或显示异常
         valid_data = {k: v for k, v in city_data.items() if v > 0 and k}
         reasons = list(valid_data.keys())
         counts = list(valid_data.values())
@@ -279,8 +299,6 @@ def create_creative_funnel(creative_data, creative_name):
     return fig
 
 # --- [图表函数结束] ---
-
-# --- [generate_sales_charts 保持不变] ---
 
 def generate_sales_charts(current_data):
     cities_data = current_data['cities_data']
@@ -407,6 +425,7 @@ def generate_creative_charts(current_data):
 
     if not selected_creatives:
         st.warning("请至少选择一个素材进行分析。")
+        # 即使没有选择，也要返回，但要保证没有图表或数据框错误
         return
 
     # 根据选择器筛选数据
@@ -592,7 +611,15 @@ st.sidebar.markdown("---")
 st.sidebar.header("🗓️ 月份管理")
 
 available_months = sorted(st.session_state.all_months_data.keys(), reverse=True)
-current_month = st.sidebar.radio("选择/编辑月份:", available_months, key="month_selector_sidebar") 
+
+# 3. 修正：设置中文月份的默认选择
+default_index = 0
+try:
+    default_index = available_months.index(DEFAULT_MONTH_2)
+except ValueError:
+    pass
+
+current_month = st.sidebar.radio("选择/编辑月份:", available_months, index=default_index, key="month_selector_sidebar") 
 st.session_state.current_month = current_month
 
 current_data = st.session_state.all_months_data[current_month]
@@ -636,16 +663,15 @@ with st.sidebar.expander(f"🔍 {current_month}流失原因数据", expanded=Fal
 
 # 添加新月份功能
 st.sidebar.markdown("---")
-new_month = st.sidebar.text_input("新增月份名称 (例如：December)", key="new_month_input")
+new_month = st.sidebar.text_input("新增月份名称 (例如：一月)", key="new_month_input")
 if st.sidebar.button("➕ 创建新月份数据"):
     if new_month and new_month not in st.session_state.all_months_data:
-        new_data = {
-            'cities_data': {city: [0]*6 for city in cities},
-            'reason_labels': {k: list(v) for k, v in EMPTY_DATA_STRUCTURE['reason_labels'].items()},
-            'reasons_data': defaultdict(dict),
-            'cost_per_lead': current_data.get('cost_per_lead', 320),
-            'creatives_data': EMPTY_DATA_STRUCTURE['creatives_data'][:]
-        }
+        # 复制现有月份的默认数据结构，以保持 reason_labels 一致
+        new_data = st.session_state.all_months_data[available_months[0]].copy()
+        new_data['cities_data'] = {city: [0]*6 for city in cities}
+        new_data['reasons_data'] = defaultdict(dict)
+        new_data['creatives_data'] = EMPTY_DATA_STRUCTURE['creatives_data'][:]
+        
         st.session_state.all_months_data[new_month] = new_data
         
         st.rerun() 
