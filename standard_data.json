@@ -1,5 +1,5 @@
 {
-    "October": {
+    "十一月": {
         "cities_data": {
             "从化": [
                 25,
@@ -327,9 +327,10 @@
                 "Deals": 0.0
             }
         ],
-        "month": "October"
+        "cost_per_lead": 320,
+        "month": "十一月"
     },
-    "November": {
+    "十二月": {
         "cities_data": {
             "从化": [
                 0,
@@ -580,6 +581,6 @@
                 "Deals": 0.0
             }
         ],
-        "month": "November"
+        "month": "十二月"
     }
 }
