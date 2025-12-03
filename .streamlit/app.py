@@ -79,7 +79,6 @@ def serialize_data_for_export():
     for month, month_data in st.session_state.all_months_data.items():
         data_to_save[month] = month_data.copy()
         
-        # 确保 defaultdict 被转换为标准 dict 才能序列化
         if isinstance(data_to_save[month].get('reasons_data'), defaultdict):
             data_to_save[month]['reasons_data'] = dict(data_to_save[month]['reasons_data'])
         
@@ -279,7 +278,7 @@ def create_creative_funnel(creative_data, creative_name):
 # --- [图表函数结束] ---
 
 
-# --- [generate_sales_charts 和 generate_creative_charts 保持不变] ---
+# --- [generate_sales_charts 保持不变] ---
 
 def generate_sales_charts(current_data):
     cities_data = current_data['cities_data']
@@ -390,6 +389,7 @@ def generate_creative_charts(current_data):
     for col in numeric_cols:
         df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
             
+    # 计算核心指标
     df['CPL'] = df['Cost'] / df['Leads'].replace(0, np.nan)
     df['Valid CPL'] = df['Cost'] / df['Valid Leads'].replace(0, np.nan)
     df['Client CPL'] = df['Cost'] / df['Clients'].replace(0, np.nan)
@@ -401,12 +401,117 @@ def generate_creative_charts(current_data):
     df['Visit Rate'] = (df['Visits'] / df['Clients'].replace(0, np.nan)) * 100 
     df['Deal Rate'] = (df['Deals'] / df['Visits'].replace(0, np.nan)) * 100
     
+    # ----------------------------------------------------
+    # 🌟 新增：评级与标签化计算
+    # ----------------------------------------------------
+
+    # 过滤掉成本和转化率都为 NaN 的行，避免影响平均值计算
+    df_valid = df.replace([np.inf, -np.inf], np.nan).dropna(subset=['Valid CPL', 'Visit Rate', 'Deal CPL'], how='all')
+
+    avg_valid_cpl = df_valid['Valid CPL'].mean() if not df_valid.empty else 0
+    avg_visit_rate = df_valid['Visit Rate'].mean() / 100 if not df_valid.empty else 0
+
+    def get_creative_rating(row, avg_cpl, avg_rate):
+        """根据有效线索成本、到访率和成交数给出评级"""
+        if pd.isna(row['Valid CPL']) or pd.isna(row['Visit Rate']):
+            return "N/A"
+        
+        score = 0
+        
+        # 1. 成本越低越好 (低于平均成本，加分)
+        if avg_cpl > 0 and row['Valid CPL'] < avg_cpl * 0.8:
+            score += 2 
+        elif avg_cpl > 0 and row['Valid CPL'] < avg_cpl * 1.1:
+            score += 1
+            
+        # 2. 到访率越高越好 (高于平均到访率，加分)
+        if avg_rate > 0 and row['Visit Rate'] / 100 > avg_rate * 1.2:
+            score += 2 
+        elif avg_rate > 0 and row['Visit Rate'] / 100 > avg_rate * 0.9:
+            score += 1 
+
+        # 3. 成交数 (Deal) 越多越好
+        if row['Deals'] > 0:
+            score += 1
+            
+        if score >= 4:
+            return "⭐⭐⭐⭐"
+        elif score >= 2:
+            return "⭐⭐⭐"
+        elif score >= 1:
+            return "⭐⭐"
+        else:
+            return "⭐"
+
+    def get_efficiency_tag(row, avg_cpl, avg_rate):
+        """根据评级、成本和转化率给出具体优化建议"""
+        rating = row['Rating']
+        if rating == "⭐⭐⭐⭐":
+            return "明星素材 (加大预算)"
+        elif rating == "⭐":
+            if avg_cpl > 0 and row['Valid CPL'] > avg_cpl * 1.5:
+                return "成本极高 (立即暂停)"
+            elif avg_cpl > 0 and row['Valid CPL'] > avg_cpl * 1.1:
+                return "成本过高 (优化创意)"
+            elif avg_rate > 0 and row['Visit Rate'] / 100 < avg_rate * 0.7 and row['Valid Leads'] > 0:
+                return "到访率低 (线索质量差)"
+            return "表现平庸 (观望/测试)"
+        return "稳健素材" # 2星和3星默认稳健
+
+    # 应用评级和标签
+    df['Rating'] = df.apply(lambda row: get_creative_rating(row, avg_valid_cpl, avg_visit_rate), axis=1)
+    df['Efficiency Tag'] = df.apply(lambda row: get_efficiency_tag(row, avg_valid_cpl, avg_visit_rate), axis=1)
+
+    # ----------------------------------------------------
+    # 📝 自动化建议摘要
+    # ----------------------------------------------------
+    
+    st.subheader("💡 投放策略建议摘要")
+    
+    star_creatives = df[df['Rating'] == "⭐⭐⭐⭐"]
+    low_deal_high_cost = df[
+        (df['Deal CPL'] == df['Deal CPL'].max()) & (df['Deal CPL'].notna()) & (df['Deals'] > 0)
+    ]
+    
+    summary_points = []
+    
+    if not star_creatives.empty:
+        best_name = star_creatives.iloc[0]['Creative Name']
+        summary_points.append(f"🥇 **明星素材：** **{best_name}** 表现出色，其有效线索成本（¥{star_creatives.iloc[0]['Valid CPL']:,.0f}）显著低于平均值。建议**立即增加预算**，进一步放大效果。")
+    
+    # 查找成本最高的且有成交的素材
+    if not low_deal_high_cost.empty:
+        worst_name = low_deal_high_cost.iloc[0]['Creative Name']
+        worst_cost = low_deal_high_cost.iloc[0]['Deal CPL']
+        summary_points.append(f"💸 **高风险素材：** **{worst_name}** 的成交成本高达 **¥{worst_cost:,.0f}**，属于高成本低效区。建议**暂停投放**或彻底优化其创意和定向。")
+
+    # 查找转化率最低的素材
+    low_visit_rate = df[(df['Visit Rate'] == df['Visit Rate'].min()) & (df['Clients'] > 0)]
+    if not low_visit_rate.empty and low_visit_rate.iloc[0]['Visit Rate'] < avg_visit_rate * 100 * 0.5:
+        low_rate_name = low_visit_rate.iloc[0]['Creative Name']
+        low_rate_value = low_visit_rate.iloc[0]['Visit Rate']
+        summary_points.append(f"📉 **转化瓶颈：** 素材 **{low_rate_name}** 的客户到访率仅有 **{low_rate_value:.1f}%**，远低于平均水平。这可能表明其吸引的线索质量差，需关注**素材内容与目标受众的匹配度**。")
+        
+    if not summary_points:
+        summary_points.append("✅ 当前素材表现较为平稳，没有明显的极端优劣情况。建议在成本和转化率平均水平附近进行微调。")
+
+    for point in summary_points:
+        st.markdown(f"* {point}")
+    
+    st.markdown("---") # 分隔符
+
+    # ----------------------------------------------------
+    # 📊 数据表格和图表
+    # ----------------------------------------------------
+    
     metric_map = {
         'Creative Name': '素材简称', 'Creative ID': '素材ID', 'Link': '素材链接', 'Cost': '总成本',
         'Leads': '线索量', 'Valid Leads': '有效线索', 'Clients': '客户数', 'Visits': '到访数', 'Deals': '成交数',
         'CPL': '线索成本 (CPL)', 'Valid CPL': '有效线索成本', 'Client CPL': '客户获取成本',
         'Visit CPL': '到访成本', 'Deal CPL': '成交成本', 'Valid Rate': '线索有效率',
-        'Client Rate': '有效线索转化率', 'Visit Rate': '客户到访率', 'Deal Rate': '到访成交率'
+        'Client Rate': '有效线索转化率', 'Visit Rate': '客户到访率', 'Deal Rate': '到访成交率',
+        'Rating': '评级',
+        'Efficiency Tag': '效率标签'
     }
 
     format_mapping = {
@@ -417,18 +522,23 @@ def generate_creative_charts(current_data):
     }
 
     st.subheader("核心指标数据表")
-    display_df = df.copy()
-    cols_to_display = ["Creative Name", "Creative ID", "Link", "Cost", "Leads", "Valid Leads", "Clients", "Visits", "Deals", 
-                       "Valid Rate", "Client Rate", "Visit Rate", "Deal Rate", 
-                       "CPL", "Valid CPL", "Client CPL", "Visit CPL", "Deal CPL"] 
+    
+    # 调整显示顺序，将评级和标签放在前面
+    cols_to_display = ["Creative Name", "Rating", "Efficiency Tag", "Cost", "Leads", "Valid Leads", "Clients", 
+                       "Visits", "Deals", "Valid Rate", "Client Rate", "Visit Rate", "Deal Rate", 
+                       "Valid CPL", "Client CPL", "Visit CPL", "Deal CPL"] 
 
+    display_df = df.copy()
+    
     for col, func in format_mapping.items():
         if col in display_df.columns:
-            display_df[col] = display_df[col].apply(lambda x: func(x) if pd.notna(x) and x is not None else '/')
+            # 替换 NaN/inf 为 '/'
+            display_df[col] = display_df[col].apply(lambda x: func(x) if pd.notna(x) and x is not None and x != np.inf and x != -np.inf else '/')
     
     display_df = display_df[cols_to_display].rename(columns=metric_map)
     st.dataframe(display_df, use_container_width=True)
 
+    # ... [图表代码保持不变] ...
     st.header("📊 素材成本指标对比")
     cost_metrics = ['CPL', 'Valid CPL', 'Client CPL', 'Visit CPL', 'Deal CPL']
     
@@ -459,7 +569,7 @@ def generate_creative_charts(current_data):
         with funnel_cols[i % cols_per_row]:
             st.plotly_chart(create_creative_funnel(row, row['Creative Name']), use_container_width=True)
 
-# --- [generate_sales_charts 和 generate_creative_charts 结束] ---
+# --- [generate_creative_charts 结束] ---
 
 
 # ==================== 5. 侧边栏及主应用入口 ====================
@@ -525,7 +635,6 @@ if st.sidebar.button("➕ 创建新月份数据"):
         }
         st.session_state.all_months_data[new_month] = new_data
         
-        # 强制重新运行以加载新月份 (不需要保存文件，因为是手动流程)
         st.rerun() 
 
 # 6. 主应用入口 (集成标签页)
@@ -544,7 +653,7 @@ with creative_tab:
     
 with edit_tab:
     st.header(f"⚙️ {current_month} - 广告素材数据编辑")
-    st.warning("您可以在表格中直接编辑数据，更改将实时更新内存中的图表。")
+    st.warning("您可以在表格中直接编辑数据，更改将实时更新内存中的图表。请在编辑完成后，手动重新运行程序以刷新 '广告素材效果分析' 标签页。")
     
     creative_df = pd.DataFrame(current_data.get('creatives_data', []))
     
@@ -560,7 +669,6 @@ with edit_tab:
         "Deals": st.column_config.NumberColumn("成交数", min_value=0)
     }
 
-    # 使用 st.data_editor 恢复互动编辑
     edited_df = st.data_editor(
         creative_df,
         column_config=column_config,
@@ -573,7 +681,7 @@ with edit_tab:
     if not edited_df.equals(creative_df):
         new_creative_data = edited_df.to_dict('records')
         current_data['creatives_data'] = new_creative_data
-        # 仅更新内存，不保存，不rerun
+        st.toast("广告素材数据已在内存中更新。", icon="📝")
 
 # 7. 开发者面板 - 核心：生成 JSON 数据
 
