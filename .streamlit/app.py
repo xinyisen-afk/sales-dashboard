@@ -25,7 +25,7 @@ DEFAULT_MONTHS_KEYS = [DEFAULT_MONTH_1, DEFAULT_MONTH_2]
 
 
 # =======================================================
-# 1. 数据加载与序列化函数
+# 1. 数据加载与序列化函数 (与原代码保持一致)
 # =======================================================
 
 # 默认空数据结构
@@ -104,8 +104,8 @@ def serialize_data_for_export():
                     data_to_save[month]['reasons_data'][stage_key] = dict(data_to_save[month]['reasons_data'][stage_key])
                 
                 for city_key in data_to_save[month]['reasons_data'][stage_key]:
-                     if isinstance(data_to_save[month]['reasons_data'][stage_key][city_key], defaultdict):
-                          data_to_save[month]['reasons_data'][stage_key][city_key] = dict(data_to_save[month]['reasons_data'][stage_key][city_key])
+                    if isinstance(data_to_save[month]['reasons_data'][stage_key][city_key], defaultdict):
+                        data_to_save[month]['reasons_data'][stage_key][city_key] = dict(data_to_save[month]['reasons_data'][stage_key][city_key])
 
     return json.dumps(data_to_save, ensure_ascii=False, indent=4)
 
@@ -113,7 +113,7 @@ def serialize_data_for_export():
 if 'all_months_data' not in st.session_state:
     load_standard_data()
 
-# ==================== 2. 核心函数定义 (图表和原因输入) ====================
+# ==================== 2. 核心函数定义 (图表和原因输入) (与原代码保持一致) ====================
 
 def create_reason_inputs(current_data, stage_key, stage_title, reason_count=4):
     """创建互动式的流失原因标签和数量输入"""
@@ -239,7 +239,7 @@ def create_simple_reason_chart(reasons_data_for_stage, title, cities):
         if reasons:
             fig.add_trace(
                 go.Bar(name=city, y=reasons, x=counts, orientation='h', marker_color=colors[:len(reasons)],
-                       text=counts, textposition='auto', showlegend=False),
+                        text=counts, textposition='auto', showlegend=False),
                 row=row_idx, col=col_idx
             )
         fig.update_xaxes(title_text="数量", row=row_idx, col=col_idx)
@@ -267,7 +267,7 @@ def create_pie_chart_for_reason(reasons_data_for_stage, title, cities):
         if counts:
             fig.add_trace(
                 go.Pie(labels=reasons, values=counts, name=city, textinfo='percent+label',
-                       showlegend=False, hole=0.4),
+                        showlegend=False, hole=0.4),
                 row=row_idx, col=col_idx
             )
     
@@ -338,14 +338,14 @@ def generate_sales_charts(current_data):
         summary_data.append(aggregate_row)
         
         for city in cities:
-             values = cities_data.get(city, [0]*6)
-             total_leads, valid_leads, clients, visits, deals = values[0], values[2], values[3], values[4], values[5]
-             total_cost = total_leads * cost_per_lead
-             city_metrics = calculate_metrics(total_leads, valid_leads, clients, visits, deals, total_cost)
-             summary_data.append({
-                 '城市': city, '线索总量': total_leads, '**到访数量**': visits,
-                 '**消费总数**': f"¥{total_cost:,.0f}", **city_metrics
-             })
+            values = cities_data.get(city, [0]*6)
+            total_leads, valid_leads, clients, visits, deals = values[0], values[2], values[3], values[4], values[5]
+            total_cost = total_leads * cost_per_lead
+            city_metrics = calculate_metrics(total_leads, valid_leads, clients, visits, deals, total_cost)
+            summary_data.append({
+                '城市': city, '线索总量': total_leads, '**到访数量**': visits,
+                '**消费总数**': f"¥{total_cost:,.0f}", **city_metrics
+            })
         
         summary_df = pd.DataFrame(summary_data)
         new_cols_order = ['城市', '线索总量', '**到访数量**', '**消费总数**', '线索有效率', '有效线索成本', '客户成本', '到访成本', '成交成本']
@@ -395,8 +395,6 @@ def generate_sales_charts(current_data):
     for tab, key, title in zip(pie_tabs, keys, titles):
         with tab:
             st.plotly_chart(create_pie_chart_for_reason(reasons_data.get(key, {}), title, cities), use_container_width=True)
-
-# --- [generate_creative_charts 包含素材对比选择器和建议] ---
 
 def generate_creative_charts(current_data):
     st.header("🖼️ 广告素材效果分析")
@@ -559,8 +557,8 @@ def generate_creative_charts(current_data):
     st.subheader("核心指标数据表")
     
     cols_to_display = ["Creative Name", "Rating", "Efficiency Tag", "Cost", "Leads", "Valid Leads", "Clients", 
-                       "Visits", "Deals", "Valid Rate", "Client Rate", "Visit Rate", "Deal Rate", 
-                       "Valid CPL", "Client CPL", "Visit CPL", "Deal CPL"] 
+                        "Visits", "Deals", "Valid Rate", "Client Rate", "Visit Rate", "Deal Rate", 
+                        "Valid CPL", "Client CPL", "Visit CPL", "Deal CPL"] 
 
     display_df = df.copy()
     
@@ -601,10 +599,111 @@ def generate_creative_charts(current_data):
         with funnel_cols[i % cols_per_row]:
             st.plotly_chart(create_creative_funnel(row, row['Creative Name']), use_container_width=True)
 
+
+# =======================================================
+# 🆕 3. 新增：推广逻辑与创意策略标签页函数
+# =======================================================
+
+def generate_marketing_logic_page():
+    st.header("💡 产业园区推广逻辑与创意策略总览")
+    st.markdown("> 本页面梳理了项目的核心营销逻辑（素材类型）与目标客户痛点，为市场推广、内容制作和销售演示提供统一的指导框架。")
+    st.markdown("---")
+
+    # --- 模块 1: 通用价值 - 解决客户核心关注点 ---
+    st.subheader("1️⃣ 核心通用价值 (面向所有潜在客户)")
+    st.markdown("这些价值点是**品牌宣传、初期引流和公域流量素材**的核心切入点。")
+
+    col_values = st.columns(4)
+    
+    # 价值点数据 (基于用户思维导图 - 通用类)
+    generic_values = {
+        "💰 综合成本优势": {
+            "icon": "💸", 
+            "keywords": "价格便宜, 直接报价, 综合成本优势", 
+            "detail": "通过规模化运营、政策红利和效率提升，实现整体成本低于行业平均水平。"
+        },
+        "📈 投资与资产属性": {
+            "icon": "🏦", 
+            "keywords": "投资资产属性, 专属政策红利, 一站式服务", 
+            "detail": "不仅仅是租赁，更是优质资产投资。享受政府政策支持和全流程金融服务，保障长期收益。"
+        },
+        "🌐 产业生态与实力": {
+            "icon": "🏭", 
+            "keywords": "园区实力, 产业链聚集, 龙头企业案例", 
+            "detail": "成熟的产业生态圈，上下游协作方便；硬件参数过硬，保障稳定生产（电力、承重、物流）。"
+        },
+        "🤝 信任与成功背书": {
+            "icon": "🏆", 
+            "keywords": "标杆客户成功案例, 问题解决过程, 首付二成起", 
+            "detail": "用成功的客户故事建立信任，展示专业的服务能力和灵活的金融方案，降低入驻门槛。"
+        }
+    }
+    
+    for i, (title, data) in enumerate(generic_values.items()):
+        with col_values[i]:
+            st.markdown(f"""
+            <div style="padding: 15px; border-radius: 10px; border-left: 5px solid #4ECDC4; background-color: #f7f7f7; height: 180px;">
+                <h4 style="margin-top: 0; color: #2C3E50;">{data['icon']} {title}</h4>
+                <p style="font-size: 14px;">**关键词：** {data['keywords']}</p>
+                <p style="font-size: 13px; color: #555;">{data['detail']}</p>
+            </div>
+            """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # --- 模块 2: 行业痛点与精准解法 - 核心可落地内容 ---
+    st.subheader("2️⃣ 行业痛点与精准解决方案 (专业化、可落地)")
+    st.markdown("这是**高意向线索**转化和**垂直媒体**投放的核心内容，要求素材高度专业，直击行业刚需。")
+
+    # 行业痛点数据 (基于用户思维导图 - 行业痛点)
+    industry_data = [
+        {
+            "行业": "化工新材料", 
+            "痛点 (挑战)": "危化品储存难；环保审批流程长，成本高。", 
+            "解决方案 (素材主题)": "**安全合规专区：** 拥有**专业危化品储存设施**和**专有环评通道**，大幅降低合规难度和时间成本。"
+        },
+        {
+            "行业": "精密制造", 
+            "痛点 (挑战)": "设备需恒温恒湿，生产环境要求高；电力不稳定或承重不匹配。", 
+            "解决方案 (素材主题)": "**高标基础设施：** 提供**高标准洁净车间**、**双回路供电**保障（避免停电）、以及**特种承重楼板**（满足重型设备）。"
+        },
+        {
+            "行业": "美妆医疗器械", 
+            "痛点 (挑战)": "必须满足 GMP/GSP 洁净要求；品牌形象需匹配高端市场。", 
+            "解决方案 (素材主题)": "**认证级厂房：** 现成**通过 GMP 认证**的洁净车间（即刻投产）；园区形象高端，助力企业**品牌升级**。"
+        }
+    ]
+    
+    # 将数据转换为 DataFrame 用于 Streamlit 展示
+    df_industry = pd.DataFrame(industry_data)
+    st.dataframe(
+        df_industry.style.set_properties(**{'font-size': '14px', 'text-align': 'left'})
+                        .set_table_styles([{'selector': 'th', 'props': [('background-color', '#4ECDC4'), ('color', 'white')]}]),
+        use_container_width=True,
+        hide_index=True
+    )
+
+    st.markdown("---")
+
+    # --- 模块 3: 创意策略与 AIPL 转化指导 ---
+    st.subheader("3️⃣ 创意内容与营销漏斗 (AIPL) 策略")
+    st.markdown("将上述逻辑点映射到具体的营销阶段，确保每个阶段的素材目标明确。")
+
+    strategy_data = [
+        {"阶段": "A - 认知 (Awareness)", "素材类型": "通用类（成本、区位、实力）", "内容目标": "广撒网，吸引注意，**解决『空间/成本』痛点**。", "投放渠道": "信息流、大众媒体"},
+        {"阶段": "I - 兴趣 (Interest)", "素材类型": "通用类（资产属性、生态、案例）", "内容目标": "展示长期价值，**建立初步信任**，引导用户点击。", "投放渠道": "专业公众号、垂直论坛、知乎"},
+        {"阶段": "P - 购买 (Purchase)", "素材类型": "行业痛点与解法（**高专业度**）", "内容目标": "提供精准的行业解决方案，**促使留资/电话**（高意向）。", "投放渠道": "搜索引擎 (高意向关键词)、行业展会、再营销"},
+        {"阶段": "L - 忠诚 (Loyalty)", "素材类型": "服务政策、金融方案、问题解决过程", "内容目标": "提供临门一脚的保障，**促进到访和成交**。", "投放渠道": "销售跟进材料、私域社群"}
+    ]
+    
+    df_strategy = pd.DataFrame(strategy_data)
+    st.table(df_strategy)
+
+
 # --- [generate_creative_charts 结束] ---
 
 
-# ==================== 5. 侧边栏及主应用入口 ====================
+# ==================== 5. 侧边栏及主应用入口 (与原代码保持一致) ====================
 
 # 1. 侧边栏：定义当前月份和添加新月份
 st.sidebar.markdown("---")
@@ -678,9 +777,10 @@ if st.sidebar.button("➕ 创建新月份数据"):
 
 # 6. 主应用入口 (集成标签页)
 
-sales_tab, creative_tab, edit_tab = st.tabs([
+sales_tab, creative_tab, logic_tab, edit_tab = st.tabs([
     "💰 销售数据总览", 
     "🖼️ 广告素材效果分析",
+    "💡 推广逻辑与创意策略", # 🆕 新增的标签页
     "⚙️ 数据编辑"
 ])
 
@@ -689,6 +789,10 @@ with sales_tab:
 
 with creative_tab:
     generate_creative_charts(current_data)
+
+# 🆕 新标签页的调用
+with logic_tab:
+    generate_marketing_logic_page()
     
 with edit_tab:
     st.header(f"⚙️ {current_month} - 广告素材数据编辑")
