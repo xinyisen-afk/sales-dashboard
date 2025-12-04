@@ -1,865 +1,324 @@
-import streamlit as st
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-import json
-import os
-from collections import defaultdict
-import numpy as np
+import io
+import streamlit as st
 
-# 网页标题和配置
-st.set_page_config(page_title="本月销售数据分析系统", layout="wide")
-st.title("🎯 本月销售与广告数据分析系统")
-st.info("💡 **重要提示：** 数据更改将实时更新图表，但不会自动保存到文件。请点击侧边栏的 **'生成最新的 JSON 数据'** 按钮，复制内容并手动更新您的 `standard_data.json` 文件。")
+# Data from uploaded CSVs (manually cleaned and structured for robust parsing)
 
-# 定义数据文件路径
-DATA_FILE = 'standard_data.json'
-cities = ['从化', '中山', '江门', '南沙二园', '佛山']
-stages = ['线索量', '接通数', '有效数', '客户数', '到访数', '成交数']
+# 1. 决策动机+购买契机.csv & 优势.csv
+decision_data = """
+购买契机,痛点 (视频切入点),人群画像,解决方案 (核心展示),沟通核心,话术示例
+企业扩张期,空间困局：订单爆满，生产线塞不下，仓库堆成山。,增长受限的制造先锋,灵活可扩展空间，大跨度、高承重车间,效率与解放,“别让宝贵的生产时间，浪费在车间里的‘长途跋涉’上。我们为您设计的高效动线，让您的产能立刻提升20%。”
+企业扩张期,产能瓶颈：电力负荷不足，大功率设备不敢想，物流效率低下。,技术升级的被困蛟龙,强大的生产配套，充足稳定的电力（双回路），合理装卸平台,赋能与支撑,“您的雄心，需要同样强大的硬件来支撑。我们的双回路电、高承重地面，就是为您下一台核心设备预备的。”
+企业扩张期,成本失控：租金年年涨，利润被房东吃掉；多点位分散管理成本高。,精打细算的长期主义者,资产优化与成本集约，变租为购（增值固定资产），产业聚集,资产与远见,“让我们算一笔十年账：持续付租金，是为房东的资产打工；购买厂房，是在为自己的未来投资。”
+企业扩张期,人才与形象困境：位置太偏招不到人，破旧厂房影响订单签约。,注重品牌的格局提升者,全方位配套与现代化形象，自带食堂、公寓、园林式厂区,形象与引力,“好的空间自己会说话。当您的客户和人才走进我们园林式的现代化园区，您的实力与品味，不言自明。”
+企业扩张期,发展孤立无援：供应链问题孤军奋战，缺乏行业交流。,寻求生态的孤军奋战者,产业生态与资源共享，上下游聚集，行业论坛,生态与机遇,“在这里，您解决的不仅是空间问题，更是发展格局问题。您加入的是一个能互相赋能的商业共同体。”
+企业战略性购置,资产保值与财富传承：对抗通胀，为子女留下实体资产。,深谋远虑的守成者,硬资产，对抗通胀的实体资产，家族基业,安全与传承,“把一年年辛苦赚来的利润，变成一砖一瓦传世的资产。购厂，是给企业的过去一个交代，更是给家族的未来一个保障。”
+企业战略性购置,经营稳定性与品牌根基：固定生产地址是品牌基石，规避被迫搬迁风险。,志存高远的品牌家,基石与背书，自有产业园是核心资产和稳定性的证明,基石与背书,“对于追求百年品牌的企业而言，一个永久的地址就是最坚实的基石。”
+企业战略性购置,企业家情怀与身份认同：从“租客”到“业主”的身份转变，实现创业梦想。,有梦要圆的主人心,圆梦与归属，从“租客”到“园主”，主宰事业的底气和格局,圆梦与归属,“奋斗了半辈子，是时候给事业一个真正属于自己的家了。”
+经营风险,合规性风险（环保/安全）：环保政策严，消防检查心惊胆战。,如履薄冰的高风险行业主,安心与合规，统一环评安评，专业危废处理，让您安心搞生产,安心与合规,“您无需再为一次突查而夜不能寐。我们园区统一的环评安评，就是给您最硬的‘护身符’。”
+经营风险,供应链断裂风险：核心零部件断供，远水救不了近火。,供应链的脆弱掌舵人,韧性与协同，让核心供应商从‘通讯录’搬到‘隔壁楼’,韧性与协同,“让您的核心供应商从‘通讯录’搬到‘隔壁楼’。彻底告别断供风险。”
+经营风险,资产安全与产权风险：村里租地产权不清，无法抵押融资。,缺乏安全感的资产焦虑者,硬核资产确权，红本产权证，优质抵押物增强融资能力,确权与赋能,“我们提供的红本产权证，不仅是合法保障，更是您撬动银行融资的‘敲门砖’。”
+经营风险,人才流失与技术泄密风险：核心工程师流失，技术被窥探。,技术护城的坚守者,高端人才引力与安防保障，现代化园区配套，高标准安防,守护与吸引,“我们用全天候安防守护您的技术秘密，用花园式社区吸引您的人才安居乐业。”
+租约到期,被动博弈与成本失控：房东涨租，每次续约像赌博。,受制于人的资深租客,掌控与锁定，将不可控的租金，变成可控的资产,掌控与锁定,“是时候结束与房东的每年博弈了。把不可控的租金，变成可控的资产。”
+租约到期,投入沉没与搬迁损耗：装修、硬化一文不值，搬迁伤筋动骨。,惧怕折腾的实业家,终结与永续，一次投入，终身受益,终结与永续,“停止为别人的资产添砖加瓦。您为自家厂房投入的每一分装修，都是在为您自己的百年基业奠定基石。”
+企业调整期,区位价值衰减：老厂区产业升级，配套凋零，被边缘化。,寻求破局的位置边缘者,升维与卡位，迁回“产业中心”，融入新的、更具活力的产业链,升维与卡位,“选择我们，就是选择重回产业发展的主航道，与未来趋势为伍。”
+"""
+df_decision = pd.read_csv(io.StringIO(decision_data))
+df_decision['购买契机'] = df_decision['购买契机'].apply(lambda x: x.split('、')[1] if '、' in x else x)
 
-# 1. 修正：默认月份改为中文（假设十月和十一月是您最常用的月份）
-DEFAULT_MONTH_1 = "十一月"
-DEFAULT_MONTH_2 = "十二月"
-DEFAULT_MONTHS_KEYS = [DEFAULT_MONTH_1, DEFAULT_MONTH_2]
+# 2. 行业痛点.csv
+industry_data = """
+目标行业,核心业务痛点 (为何需要买厂房),决策关键因素 (为何选我们),首选推荐园区
+日用化学品/精细化工,"落户难；环保压力；生产不连贯",准入政策（丙类厂房）、环保配套（污水管网）、安全生产,江门园区
+新材料（如复合材料、新能源材料）,"工艺特殊（层高/承重/洁净度）；研发驱动；形象匹配",定制化空间（高标参数）、产业生态、稳定性（自有产权）,从化园区
+化妆品（品牌与代工厂）,"品牌形象；供应链效率；法规升级",产业集群（一站式）、园区形象（现代化）、合规保障（GMP）,从化/中山/佛山/南沙/海珠园区
+医疗器械与大健康,"认证壁垒（地址锁定）；环境严苛；资产属性",地址永续（避免认证灾难）、专业装修基础、资产价值（增强信用）,从化/中山/佛山/南沙/海珠园区
+精密制造/电子信息,"设备精密；技术保密；人才需求",硬件保障（双回路电）、园区安防、人才环境（完善配套）,从化园区
+食品加工,"认证严格（SC）；环保痛点（高有机物废水）；扩张需求",环保配套（污水管网）、高标厂房、稳定性（品质追溯）,江门园区
+汽车零部件,"供应链协同；技术升级；重资产投入",区位战略（大湾区辐射）、产业生态、资产稳固（固定资产基石）,从化/江门园区
+工业装备/机器人,"试产与展示需求；客户到访频繁；重型设备",空间复合性（前展后厂）、形象提升、硬件参数（承重/行车）,从化/中山园区
+化妆品包材与模具,"远离核心客户导致沟通、打样、运输成本高企。",零距离协同（与核心品牌客户为邻）,中山园区
+五金加工/注塑成型,"行业利润薄（成本敏感）；生产环境差（影响员工稳定）",资产升级（以租抵供）、环境改善（标准、安全、整洁）,江门园区
+"""
+df_industry = pd.read_csv(io.StringIO(industry_data))
 
-
-# =======================================================
-# 1. 数据加载与序列化函数 (与原代码保持一致)
-# =======================================================
-
-# 默认空数据结构
-EMPTY_DATA_STRUCTURE = {
-    'cities_data': {city: [0]*6 for city in cities},
-    'reason_labels': {
-        'invalid': ['空号错号', '无人接听', '拒绝沟通', '信息错误'],
-        'not_converted': ['需求不符', '预算不足', '竞品选择', '时机不对'],
-        'not_client': ['价格问题', '服务担忧', '方案不符', '跟进中'],
-        'not_visit': ['时间冲突', '距离太远', '兴趣减弱', '其他安排'],
-        'not_deal': ['价格太贵', '被竞品抢走', '资金问题', '决策延迟']
+# 3. 定制厂房+火车头.csv
+custom_data = """
+厂房类型,定义与核心价值,最适合的行业,核心卖点（客户价值）,针对性话术
+标准定制厂房,空间与工艺的完美融合，实现生产效率最大化。,"新能源电池/储能设备, 大型装备制造, 汽车零部件总成, 食品饮料生产线, 特定化工工艺流程",流程优化,成本节约,合规前置,技术保密,"我们不只是给您一个空间，而是为您打造一套高效的生产系统。从图纸开始，就让您的竞争力建立在硬件之上。"
+火车头定制厂房（龙头引领）,打造产业生态的基石，实现企业与园区的双向赋能。,"新能源汽车主机厂, 化妆品/保健品知名品牌, 医疗器械行业龙头, 国内外上市公司, 细分领域“独角兽”企业",地标形象,生态主导权,政策聚焦,价值投资,"我们为您预留了园区最好的位置，打造地标。邀请您以‘链主’的身份入驻，共同定义这个产业的未来格局。"
+"""
+# Manually structure custom data to a simpler format for display
+custom_details = [
+    {
+        "类型": "🏭 标准定制厂房",
+        "价值": "空间与工艺的完美融合，实现生产效率最大化。",
+        "行业": "新能源电池/储能、大型装备制造、汽车零部件、食品饮料等。",
+        "卖点": ["流程优化", "成本节约", "合规前置", "技术保密"]
     },
-    'reasons_data': defaultdict(dict),
-    'cost_per_lead': 320,
-    'creatives_data': [
-        {"Creative Name": "Default_1", "Creative ID": "A001", "Link": "http://example.com", "Cost": 0, "Leads": 0, "Valid Leads": 0, "Clients": 0, "Visits": 0, "Deals": 0}
-    ]
+    {
+        "类型": "🚂 火车头定制厂房 (龙头引领)",
+        "价值": "打造产业生态的基石，实现企业与园区的双向赋能。",
+        "行业": "新能源汽车主机厂、知名品牌、行业龙头、上市公司等。",
+        "卖点": ["地标形象", "生态主导权", "政策聚焦", "价值投资"]
+    }
+]
+
+# 4. 脚本开头.csv & 脚本.csv
+script_data = {
+    "订单爆单的烦恼": {
+        "痛点": "空间不足导致无法承接更多订单，增长遇到天花板。",
+        "场景": "老板在办公室里，电话响个不停，同时看着电脑上爆满的订单邮件和桌上厚厚的生产单，面露焦虑和疲惫。生产经理跑来报告：‘老板，真的没地方下脚了！’",
+        "话术示例": "想批量扩产、上多条生产线？小厂房根本撑不起你的野心！3000 平以下空间不够用，生产线铺不开！来中创从化！3000 平 + 专属厂房，大跨度高承重，适配规模化生产！",
+        "CTA": "规模化扩张不将就！点击链接，锁定中创从化大面积黄金厂房！"
+    },
+    "拥挤的车间": {
+        "痛点": "混乱低效的现场管理，制约产能，无法升级设备。",
+        "场景": "第一人称视角，在拥挤的车间里穿梭。原材料和成品堆在一起，工人侧身通过。新到的先进设备因没地方安装而蒙着布。",
+        "话术示例": "花巨资买的先进设备，却只能在角落蒙灰？别让陈旧的生产环境成为您技术升级的障碍！我们提供大跨度、高承重、高电力配套的现代化标准厂房，让您的技术能落地生金！",
+        "CTA": "点击升级您的生产系统，享受技术红利！"
+    },
+    "被拒绝的遗憾": {
+        "痛点": "因产能限制，眼睁睁错过战略机遇和高利润大订单。",
+        "场景": "老板正在与重要客户会谈。客户提出一个利润丰厚的大订单，但要求短交付周期。老板不得不婉拒：‘王总，实在抱歉，我们目前的产能真的吃不下…’",
+        "话术示例": "不是您实力不行，是您的空间限制了您的格局！放弃大订单的痛，我们懂！中创产业园，提供即买即用，快速扩容的定制化空间，让您永不错过下一个‘王总’！",
+        "CTA": "告别遗憾，立刻获取大订单解决方案！"
+    },
+    "算不清的租金账": {
+        "痛点": "持续增长的租金不断侵蚀利润，为房东打工。",
+        "场景": "动画形式。一个写着‘租金’的漏斗不断吸走代表‘利润’的金币。年份数字快速跳动，租金数额逐年上涨，老板看着报表叹气。",
+        "话术示例": "您还在为别人的资产添砖加瓦吗？每月交的租金，足够您供一套自己的厂房！变消费为投资，锁定未来的生产成本，让每一分钱都沉淀为企业资产！",
+        "CTA": "停止为房东打工，计算您的购厂回报率！"
+    },
+    "新老厂房的时空切换": {
+        "痛点": "渴望现代化、高效率的生产空间，实现企业形象的升维。",
+        "场景": "老板在老旧拥挤车间巡视，推开门，瞬间切换到中创园区宽敞明亮的现代化厂房，崭新生产线有序运转，脸上露出震撼和向往的表情。",
+        "话术示例": "是时候给您的品牌一个与之匹配的‘门面’了！从破旧到地标，我们提供园林式、现代化的标准园区，让您的厂房成为最好的名片，客户来访，订单自然水到渠成。",
+        "CTA": "提升企业形象，预约参观花园式产业园！"
+    }
 }
 
-def load_standard_data():
-    """尝试加载多月份数据，并设置默认 session state"""
-    try:
-        # 使用 utf-8-sig 以处理可能存在的 BOM
-        with open(DATA_FILE, 'r', encoding='utf-8-sig') as f:
-            data = json.load(f)
-            
-            for month in data:
-                month_data = data[month]
-                if 'creatives_data' not in month_data:
-                    month_data['creatives_data'] = EMPTY_DATA_STRUCTURE['creatives_data'][:]
-                
-                # 确保广告素材数据是数字类型
-                for creative in month_data['creatives_data']:
-                    for key in ["Cost", "Leads", "Valid Leads", "Clients", "Visits", "Deals"]:
-                        try:
-                            creative[key] = float(creative.get(key, 0))
-                        except:
-                            creative[key] = 0
-                            
-            st.session_state.all_months_data = data
-            st.sidebar.success("✅ 已加载多月份标准数据。")
-    except FileNotFoundError:
-        st.sidebar.error(f"⚠️ 警告：未找到 {DATA_FILE} 文件。创建默认结构。")
-        # 2. 修正：使用中文月份作为默认键
-        st.session_state.all_months_data = {
-            DEFAULT_MONTH_1: EMPTY_DATA_STRUCTURE.copy(),
-            DEFAULT_MONTH_2: EMPTY_DATA_STRUCTURE.copy()
-        }
-    except json.JSONDecodeError:
-        st.sidebar.error(f"⚠️ 警告：{DATA_FILE} 文件格式错误。使用默认结构。")
-        st.session_state.all_months_data = {
-            DEFAULT_MONTH_1: EMPTY_DATA_STRUCTURE.copy(),
-            DEFAULT_MONTH_2: EMPTY_DATA_STRUCTURE.copy()
-        }
-    except Exception as e:
-        st.sidebar.error(f"⚠️ 警告：加载数据时发生未知错误：{e}。使用默认结构。")
-        st.session_state.all_months_data = {
-            DEFAULT_MONTH_1: EMPTY_DATA_STRUCTURE.copy(),
-            DEFAULT_MONTH_2: EMPTY_DATA_STRUCTURE.copy()
-        }
-
-
-def serialize_data_for_export():
-    """将当前的 session state 中的所有月份数据整理成 JSON 格式"""
-    data_to_save = {}
-    for month, month_data in st.session_state.all_months_data.items():
-        data_to_save[month] = month_data.copy()
-        
-        # 确保 defaultdict 被转换为标准 dict 才能序列化
-        if isinstance(data_to_save[month].get('reasons_data'), defaultdict):
-            data_to_save[month]['reasons_data'] = dict(data_to_save[month]['reasons_data'])
-        
-        if 'reasons_data' in data_to_save[month]:
-            for stage_key in data_to_save[month]['reasons_data']:
-                if isinstance(data_to_save[month]['reasons_data'][stage_key], defaultdict):
-                    data_to_save[month]['reasons_data'][stage_key] = dict(data_to_save[month]['reasons_data'][stage_key])
-                
-                for city_key in data_to_save[month]['reasons_data'][stage_key]:
-                    if isinstance(data_to_save[month]['reasons_data'][stage_key][city_key], defaultdict):
-                        data_to_save[month]['reasons_data'][stage_key][city_key] = dict(data_to_save[month]['reasons_data'][stage_key][city_key])
-
-    return json.dumps(data_to_save, ensure_ascii=False, indent=4)
-
-# 应用启动时，立即加载数据
-if 'all_months_data' not in st.session_state:
-    load_standard_data()
-
-# ==================== 2. 核心函数定义 (图表和原因输入) (与原代码保持一致) ====================
-
-def create_reason_inputs(current_data, stage_key, stage_title, reason_count=4):
-    """创建互动式的流失原因标签和数量输入"""
-    
-    st.subheader(stage_title)
-    
-    # 1. 原因标签名称
-    st.markdown("##### 📌 **原因标签设置 (影响所有城市)**")
-    label_cols = st.columns(reason_count)
-    current_labels = []
-    
-    current_default_labels = current_data['reason_labels'].get(stage_key, [''] * 4)
-    
-    for i in range(reason_count):
-        label = label_cols[i].text_input(
-            f"原因 {i+1} 名称", 
-            value=current_default_labels[i] if len(current_default_labels) > i else '',
-            key=f"label_{current_data['month']}_{stage_key}_{i}"
-        )
-        current_labels.append(label)
-    current_data['reason_labels'][stage_key] = current_labels 
-    
-    # 2. 各城市流失数量
-    st.markdown("##### 🔢 **各城市流失数量**")
-    
-    new_reason_data_for_stage = defaultdict(dict) 
-    
-    for city in cities:
-        st.write(f"**{city}**")
-        cols = st.columns(reason_count)
-        
-        city_initial_data = current_data['reasons_data'].get(stage_key, {}).get(city, {})
-        city_reason_data = {} 
-        
-        for i in range(reason_count):
-            label = current_labels[i] 
-            initial_value = city_initial_data.get(label, 0)
-            
-            value = cols[i].number_input(
-                f"{label} ({city})", 
-                value=initial_value, 
-                key=f"{current_data['month']}_{stage_key}_{city}_{i}",
-                min_value=0,
-                label_visibility="collapsed" 
-            )
-            if label:
-                city_reason_data[label] = int(value) 
-                
-        new_reason_data_for_stage[city] = city_reason_data
-        
-    current_data['reasons_data'][stage_key] = dict(new_reason_data_for_stage)
-
-# --- [所有图表函数保持不变] ---
-
-def create_beautiful_funnel(city_data, city_name, stages):
-    values = city_data
-    color_schemes = {
-        '从化': ['#FF6B6B', '#FF8E8E', '#FFB1B1', '#FFD4D4', '#FFE8E8', '#FFF5F5'],
-        '中山': ['#4ECDC4', '#88D8D0', '#A8E6DD', '#C8F3EC', '#E1F8F5', '#F0FCFA'],
-        '江门': ['#45B7D1', '#7BC9E0', '#9AD6E8', '#B9E3F0', '#D4EDF7', '#EAF6FB'],
-        '南沙二园': ['#96CEB4', '#B4E0C8', '#D2F0DC', '#E8F8F0', '#F2FBF4', '#F7FDF9'], 
-        '佛山': ['#FFD700', '#FFE64D', '#FFF099', '#FFF7CC', '#FFFBF0', '#FFFDF8'] 
+# 5. 销售流失归因系统.csv
+attribution_data = {
+    "线索无效": {
+        "高频流失原因": "1. 未接通 (46例); 2. 没有这个需求 (9例); 3. 非目标客户 (4例)",
+        "反向改进建议": "优化市场推广渠道和线索获取精度。加强对线索电话号码的有效性检查。"
+    },
+    "不符合客户": {
+        "高频流失原因": "1. 基础需求不匹配; 2. 预算不符; 3. 多次沟通未获明确需求",
+        "反向改进建议": "加强销售团队的前期需求探询能力和房源匹配效率。针对性调整推广话术，过滤不符合预算的早期线索。"
+    },
+    "没到访": {
+        "高频流失原因": "1. 时间协调未果; 2. 对方案不满意",
+        "反向改进建议": "优化首次沟通的方案吸引力。提供更灵活的到访方式（如线上VR看房）。"
+    },
+    "带看后流失": {
+        "高频流失原因": "1. 价格因素; 2. 准入问题; 3. 配套环境",
+        "反向改进建议": "提升房源的预处理与包装能力，并在带看前做好更严格的准入筛选。优化谈判策略和权限管理。"
     }
-    colors = color_schemes.get(city_name, px.colors.sequential.Blues)
-    text_colors = ["white"] * 3 + ["black"] * 3
-    
-    fig = go.Figure(go.Funnel(
-        y=stages, x=values, textposition="inside", textinfo="value+percent initial",
-        textfont=dict(size=12, color=text_colors, weight="bold"),
-        marker=dict(color=colors[:len(values)], line=dict(width=2, color="darkgray")),
-        connector=dict(line=dict(color="rgba(128,128,128,0.5)", width=2, dash="dot")),
-        opacity=0.85
-    ))
-    fig.update_layout(
-        title={'text': f"<b>{city_name}转化漏斗</b>",'x': 0.5, 'xanchor': 'center','font': {'size': 16, 'color': '#2C3E50'}},
-        plot_bgcolor='rgba(248,248,248,0.8)', paper_bgcolor='white', font=dict(size=11), height=450,
-        margin=dict(t=60, b=40, l=60, r=40), showlegend=False
-    )
-    return fig
+}
 
-def create_horizontal_funnel(city_data, city_name, stages):
-    values = city_data
-    horizontal_colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFD700', '#DDA0DD']
-    valid_values = [v if v > 0 else 0.1 for v in values]
-    
-    fig = go.Figure(go.Funnel(
-        y=stages, x=valid_values, orientation="h", textposition="inside", textinfo="value+percent initial",
-        textfont=dict(size=11, color="white", weight="bold"),
-        marker=dict(color=horizontal_colors[:len(values)], line=dict(width=2, color="white")),
-        opacity=0.9
-    ))
-    fig.update_layout(
-        title={'text': f"<b>{city_name}水平视图</b>",'x': 0.5, 'xanchor': 'center', 'font': {'size': 14, 'color': '#2C3E50'}},
-        plot_bgcolor='rgba(248,248,248,0.8)', paper_bgcolor='white', height=400,
-        margin=dict(t=50, b=40, l=80, r=40)
-    )
-    return fig
-
-# 3. 修正：保留计数为 0 的原因标签
-def create_simple_reason_chart(reasons_data_for_stage, title, cities):
-    cols_count = 3
-    rows_count = int(np.ceil(len(cities) / cols_count))
-    
-    fig = make_subplots(rows=rows_count, cols=cols_count, 
-                        subplot_titles=[f'{city}{title}' for city in cities],
-                        horizontal_spacing=0.1, vertical_spacing=0.2)
-    colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4']
-    
-    for i, city in enumerate(cities):
-        city_data = reasons_data_for_stage.get(city, {})
-        
-        # 修正逻辑：保留所有标签，零值用 0 显示
-        reasons = []
-        counts = []
-        for k, v in city_data.items():
-            if k: # 排除空标签
-                reasons.append(k)
-                counts.append(int(v) if v is not None else 0)
-        
-        row_idx = (i // cols_count) + 1
-        col_idx = (i % cols_count) + 1
-        
-        if reasons:
-            fig.add_trace(
-                go.Bar(name=city, y=reasons, x=counts, orientation='h', marker_color=colors[:len(reasons)],
-                        text=counts, textposition='auto', showlegend=False),
-                row=row_idx, col=col_idx
-            )
-        fig.update_xaxes(title_text="数量", row=row_idx, col=col_idx)
-    
-    fig.update_layout(height=max(400, rows_count * 400), showlegend=False, title_text=f"<b>{title}分析</b>", title_x=0.5)
-    return fig
-
-def create_pie_chart_for_reason(reasons_data_for_stage, title, cities):
-    cols_count = 3
-    rows_count = int(np.ceil(len(cities) / cols_count))
-
-    fig = make_subplots(rows=rows_count, cols=cols_count, subplot_titles=[f'{city}{title}占比' for city in cities],
-                        specs=[[{"type": "pie"}] * cols_count] * rows_count)
-    
-    for i, city in enumerate(cities):
-        city_data = reasons_data_for_stage.get(city, {})
-        # 饼图必须过滤掉 0 值，否则 Plotly 会报错或显示异常
-        valid_data = {k: v for k, v in city_data.items() if v > 0 and k}
-        reasons = list(valid_data.keys())
-        counts = list(valid_data.values())
-        
-        row_idx = (i // cols_count) + 1
-        col_idx = (i % cols_count) + 1
-        
-        if counts:
-            fig.add_trace(
-                go.Pie(labels=reasons, values=counts, name=city, textinfo='percent+label',
-                        showlegend=False, hole=0.4),
-                row=row_idx, col=col_idx
-            )
-    
-    fig.update_layout(height=max(400, rows_count * 400), showlegend=False, title_text=f"<b>{title}占比分析</b>", title_x=0.5)
-    return fig
-
-def create_creative_funnel(creative_data, creative_name):
-    stages_names = ["线索量", "有效线索", "客户数", "到访数", "成交数"]
-    values = [
-        creative_data.get('Leads', 0), creative_data.get('Valid Leads', 0), 
-        creative_data.get('Clients', 0), creative_data.get('Visits', 0), creative_data.get('Deals', 0)
-    ]
-    
-    colors = px.colors.sequential.Plasma_r[:len(values)]
-    text_colors = ["white"] * 3 + ["black"] * 2
-    
-    fig = go.Figure(go.Funnel(
-        y=stages_names, x=values, textposition="inside", textinfo="value+percent initial",
-        textfont=dict(size=12, color=text_colors, weight="bold"),
-        marker=dict(color=colors, line=dict(width=2, color="darkgray")),
-        connector=dict(line=dict(color="rgba(128,128,128,0.5)", width=2, dash="dot")),
-        opacity=0.85
-    ))
-    fig.update_layout(
-        title={'text': f"<b>{creative_name} 转化漏斗</b>",'x': 0.5, 'xanchor': 'center','font': {'size': 16, 'color': '#2C3E50'}},
-        plot_bgcolor='rgba(248,248,248,0.8)', paper_bgcolor='white', font=dict(size=11), height=450,
-        margin=dict(t=60, b=40, l=60, r=40), showlegend=False
-    )
-    return fig
-
-# --- [图表函数结束] ---
-
-def generate_sales_charts(current_data):
-    cities_data = current_data['cities_data']
-    reasons_data = current_data['reasons_data']
-    cost_per_lead = current_data.get('cost_per_lead', 320)
-    
-    col1, col2 = st.columns([3, 2])
-    with col1:
-        st.header("📈 数据汇总看板")
-        def calculate_metrics(total_leads, valid_leads, clients, visits, deals, total_cost):
-            valid_rate = (valid_leads / total_leads * 100) if total_leads > 0 else 0
-            valid_lead_cost = total_cost / valid_leads if valid_leads > 0 else 0
-            client_cost = total_cost / clients if clients > 0 else 0
-            visit_cost = total_cost / visits if visits > 0 else 0
-            deal_cost = total_cost / deals if deals > 0 else 0
-            return {
-                '线索有效率': f"{valid_rate:.1f}%",
-                '有效线索成本': f"¥{valid_lead_cost:,.0f}" if valid_lead_cost > 0 else "/",
-                '客户成本': f"¥{client_cost:,.0f}" if client_cost > 0 else "/",
-                '到访成本': f"¥{visit_cost:,.0f}" if visit_cost > 0 else "/",
-                '成交成本': f"¥{deal_cost:,.0f}" if deal_cost > 0 else "/"
-            }
-        
-        total_leads_agg = sum(cities_data.get(city, [0]*6)[0] for city in cities)
-        valid_leads_agg = sum(cities_data.get(city, [0]*6)[2] for city in cities)
-        clients_agg = sum(cities_data.get(city, [0]*6)[3] for city in cities)
-        visits_agg = sum(cities_data.get(city, [0]*6)[4] for city in cities)
-        deals_agg = sum(cities_data.get(city, [0]*6)[5] for city in cities)
-        total_cost_agg = total_leads_agg * cost_per_lead
-        
-        summary_data = []
-        agg_metrics = calculate_metrics(total_leads_agg, valid_leads_agg, clients_agg, visits_agg, deals_agg, total_cost_agg)
-        aggregate_row = {
-            '城市': '**汇总**', '线索总量': total_leads_agg, '**到访数量**': visits_agg,
-            '**消费总数**': f"¥{total_cost_agg:,.0f}", **agg_metrics 
-        }
-        summary_data.append(aggregate_row)
-        
-        for city in cities:
-            values = cities_data.get(city, [0]*6)
-            total_leads, valid_leads, clients, visits, deals = values[0], values[2], values[3], values[4], values[5]
-            total_cost = total_leads * cost_per_lead
-            city_metrics = calculate_metrics(total_leads, valid_leads, clients, visits, deals, total_cost)
-            summary_data.append({
-                '城市': city, '线索总量': total_leads, '**到访数量**': visits,
-                '**消费总数**': f"¥{total_cost:,.0f}", **city_metrics
-            })
-        
-        summary_df = pd.DataFrame(summary_data)
-        new_cols_order = ['城市', '线索总量', '**到访数量**', '**消费总数**', '线索有效率', '有效线索成本', '客户成本', '到访成本', '成交成本']
-        summary_df = summary_df[new_cols_order]
-        st.dataframe(summary_df, use_container_width=True)
-
-    with col2:
-        st.header("🔢 线索量分布")
-        leads_data = [cities_data.get(city, [0])[0] for city in cities]
-        fig_pie = px.pie(values=leads_data, names=cities, title='', color_discrete_sequence=['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFD700'])
-        fig_pie.update_traces(textposition='inside', textinfo='percent+label')
-        fig_pie.update_layout(height=350, showlegend=True)
-        st.plotly_chart(fig_pie, use_container_width=True)
-
-    st.header("🎨 转化漏斗分析")
-    tab1, tab2 = st.tabs(["🎯 垂直漏斗图", "📊 水平视图"])
-    city_display_groups = [cities[:3], cities[3:]] 
-    
-    with tab1:
-        st.subheader("垂直漏斗图")
-        for group in city_display_groups:
-            cols = st.columns(len(group))
-            for i, city in enumerate(group):
-                with cols[i]:
-                    st.plotly_chart(create_beautiful_funnel(cities_data.get(city, [0]*6), city, stages), use_container_width=True)
-    
-    with tab2:
-        st.subheader("水平漏斗图")
-        for group in city_display_groups:
-            cols = st.columns(len(group))
-            for i, city in enumerate(group):
-                with cols[i]:
-                    st.plotly_chart(create_horizontal_funnel(cities_data.get(city, [0]*6), city, stages), use_container_width=True)
-    
-    st.header("🔍 未转化客户深度分析 - 柱状图")
-    tabs = st.tabs(["❌ 无效线索原因", "📞 未转化线索原因", "👥 未转化客户原因", "🚫 未到访原因", "💸 未成交原因"])
-    keys = ['invalid', 'not_converted', 'not_client', 'not_visit', 'not_deal']
-    titles = ["无效线索原因", "未转化线索原因", "未转化客户原因", "未到访原因", "未成交原因"]
-    
-    for tab, key, title in zip(tabs, keys, titles):
-        with tab:
-            st.plotly_chart(create_simple_reason_chart(reasons_data.get(key, {}), title, cities), use_container_width=True)
-
-    st.header("🥧 未转化客户深度分析 - 饼图")
-    pie_tabs = st.tabs([f"❌ {titles[0]}分布", f"📞 {titles[1]}分布", f"👥 {titles[2]}分布", f"🚫 {titles[3]}分布", f"💸 {titles[4]}分布"])
-    
-    for tab, key, title in zip(pie_tabs, keys, titles):
-        with tab:
-            st.plotly_chart(create_pie_chart_for_reason(reasons_data.get(key, {}), title, cities), use_container_width=True)
-
-def generate_creative_charts(current_data):
-    st.header("🖼️ 广告素材效果分析")
-    creatives_data = current_data.get('creatives_data', [])
-    if not creatives_data:
-        st.warning("当前月份没有广告素材数据。请前往 '⚙️ 数据编辑' 标签页添加数据。")
-        return
-
-    df_full = pd.DataFrame(creatives_data)
-    numeric_cols = ["Cost", "Leads", "Valid Leads", "Clients", "Visits", "Deals"]
-    for col in numeric_cols:
-        df_full[col] = pd.to_numeric(df_full[col], errors='coerce').fillna(0)
-
-    # ----------------------------------------------------
-    # 🌟 素材对比选择器
-    # ----------------------------------------------------
-    all_creative_names = df_full['Creative Name'].tolist()
-    
-    st.subheader("🔍 素材对比与筛选")
-    selected_creatives = st.multiselect(
-        "选择要对比的广告素材 (推荐选择 2-4 个进行深度对比)",
-        options=all_creative_names,
-        default=all_creative_names[:3] if len(all_creative_names) >= 3 else all_creative_names,
-        key=f"{current_data['month']}_creative_selector"
-    )
-
-    if not selected_creatives:
-        st.warning("请至少选择一个素材进行分析。")
-        # 即使没有选择，也要返回，但要保证没有图表或数据框错误
-        return
-
-    # 根据选择器筛选数据
-    df = df_full[df_full['Creative Name'].isin(selected_creatives)].copy()
-    
-    # ----------------------------------------------------
-    # 计算核心指标 
-    # ----------------------------------------------------
-    df['CPL'] = df['Cost'] / df['Leads'].replace(0, np.nan)
-    df['Valid CPL'] = df['Cost'] / df['Valid Leads'].replace(0, np.nan)
-    df['Client CPL'] = df['Cost'] / df['Clients'].replace(0, np.nan)
-    df['Visit CPL'] = df['Cost'] / df['Visits'].replace(0, np.nan)
-    df['Deal CPL'] = df['Cost'] / df['Deals'].replace(0, np.nan)
-    
-    df['Valid Rate'] = (df['Valid Leads'] / df['Leads'].replace(0, np.nan)) * 100
-    df['Client Rate'] = (df['Clients'] / df['Valid Leads'].replace(0, np.nan)) * 100
-    df['Visit Rate'] = (df['Visits'] / df['Clients'].replace(0, np.nan)) * 100 
-    df['Deal Rate'] = (df['Deals'] / df['Visits'].replace(0, np.nan)) * 100
-    
-    # ----------------------------------------------------
-    # 🌟 评级与标签化计算
-    # ----------------------------------------------------
-
-    df_valid = df.replace([np.inf, -np.inf], np.nan).dropna(subset=['Valid CPL', 'Visit Rate', 'Deal CPL'], how='all')
-
-    avg_valid_cpl = df_valid['Valid CPL'].mean() if not df_valid.empty else 0
-    avg_visit_rate = df_valid['Visit Rate'].mean() / 100 if not df_valid.empty else 0
-
-    def get_creative_rating(row, avg_cpl, avg_rate):
-        if pd.isna(row['Valid CPL']) or pd.isna(row['Visit Rate']):
-            return "N/A"
-        
-        score = 0
-        
-        if avg_cpl > 0 and row['Valid CPL'] < avg_cpl * 0.8:
-            score += 2
-        elif avg_cpl > 0 and row['Valid CPL'] < avg_cpl * 1.1:
-            score += 1
-            
-        if avg_rate > 0 and row['Visit Rate'] / 100 > avg_rate * 1.2:
-            score += 2
-        elif avg_rate > 0 and row['Visit Rate'] / 100 > avg_rate * 0.9:
-            score += 1
-
-        if row['Deals'] > 0:
-            score += 1
-            
-        if score >= 4:
-            return "⭐⭐⭐⭐"
-        elif score >= 2:
-            return "⭐⭐⭐"
-        elif score >= 1:
-            return "⭐⭐"
-        else:
-            return "⭐"
-
-    def get_efficiency_tag(row, avg_cpl, avg_rate):
-        rating = row['Rating']
-        if rating == "⭐⭐⭐⭐":
-            return "明星素材 (加大预算)"
-        elif rating == "⭐":
-            if avg_cpl > 0 and row['Valid CPL'] > avg_cpl * 1.5:
-                return "成本极高 (立即暂停)"
-            elif avg_cpl > 0 and row['Valid CPL'] > avg_cpl * 1.1:
-                return "成本过高 (优化创意)"
-            elif avg_rate > 0 and row['Visit Rate'] / 100 < avg_rate * 0.7 and row['Valid Leads'] > 0:
-                return "到访率低 (线索质量差)"
-            return "表现平庸 (观望/测试)"
-        return "稳健素材"
-
-    df['Rating'] = df.apply(lambda row: get_creative_rating(row, avg_valid_cpl, avg_visit_rate), axis=1)
-    df['Efficiency Tag'] = df.apply(lambda row: get_efficiency_tag(row, avg_valid_cpl, avg_visit_rate), axis=1)
-
-    # ----------------------------------------------------
-    # 📝 自动化建议摘要
-    # ----------------------------------------------------
-    
-    st.subheader("💡 投放策略建议摘要")
-    
-    star_creatives = df[df['Rating'] == "⭐⭐⭐⭐"]
-    low_deal_high_cost = df[
-        (df['Deal CPL'] == df['Deal CPL'].max()) & (df['Deal CPL'].notna()) & (df['Deals'] > 0)
-    ]
-    
-    summary_points = []
-    
-    if not star_creatives.empty:
-        best_name = star_creatives.iloc[0]['Creative Name']
-        summary_points.append(f"🥇 **明星素材：** **{best_name}** 表现出色，其有效线索成本（¥{star_creatives.iloc[0]['Valid CPL']:,.0f}）显著低于平均值。建议**立即增加预算**，进一步放大效果。")
-    
-    if not low_deal_high_cost.empty:
-        worst_name = low_deal_high_cost.iloc[0]['Creative Name']
-        worst_cost = low_deal_high_cost.iloc[0]['Deal CPL']
-        summary_points.append(f"💸 **高风险素材：** **{worst_name}** 的成交成本高达 **¥{worst_cost:,.0f}**，属于高成本低效区。建议**暂停投放**或彻底优化其创意和定向。")
-
-    low_visit_rate = df[(df['Visit Rate'] == df['Visit Rate'].min()) & (df['Clients'] > 0)]
-    if avg_visit_rate > 0 and not low_visit_rate.empty and low_visit_rate.iloc[0]['Visit Rate'] < avg_visit_rate * 100 * 0.5:
-        low_rate_name = low_visit_rate.iloc[0]['Creative Name']
-        low_rate_value = low_visit_rate.iloc[0]['Visit Rate']
-        summary_points.append(f"📉 **转化瓶颈：** 素材 **{low_rate_name}** 的客户到访率仅有 **{low_rate_value:.1f}%**，远低于平均水平。这可能表明其吸引的线索质量差，需关注**素材内容与目标受众的匹配度**。")
-        
-    if not summary_points:
-        summary_points.append("✅ 当前素材表现较为平稳，没有明显的极端优劣情况。建议在成本和转化率平均水平附近进行微调。")
-
-    for point in summary_points:
-        st.markdown(f"* {point}")
-    
+# --- Streamlit App Function ---
+def main():
+    st.set_page_config(layout="wide", page_title="推广逻辑与创意策略仪表盘")
+    st.title("💡 推广逻辑与创意策略：创意与执行工具库")
     st.markdown("---")
 
-    # ----------------------------------------------------
-    # 📊 数据表格和图表 (只显示筛选后的素材)
-    # ----------------------------------------------------
-    
-    metric_map = {
-        'Creative Name': '素材简称', 'Creative ID': '素材ID', 'Link': '素材链接', 'Cost': '总成本',
-        'Leads': '线索量', 'Valid Leads': '有效线索', 'Clients': '客户数', 'Visits': '到访数', 'Deals': '成交数',
-        'CPL': '线索成本 (CPL)', 'Valid CPL': '有效线索成本', 'Client CPL': '客户获取成本',
-        'Visit CPL': '到访成本', 'Deal CPL': '成交成本', 'Valid Rate': '线索有效率',
-        'Client Rate': '有效线索转化率', 'Visit Rate': '客户到访率', 'Deal Rate': '到访成交率',
-        'Rating': '评级',
-        'Efficiency Tag': '效率标签'
-    }
-
-    format_mapping = {
-        'Cost': '¥{:,.0f}'.format, 'CPL': '¥{:,.0f}'.format, 'Valid CPL': '¥{:,.0f}'.format, 
-        'Client CPL': '¥{:,.0f}'.format, 'Visit CPL': '¥{:,.0f}'.format, 'Deal CPL': '¥{:,.0f}'.format,
-        'Valid Rate': '{:.1f}%'.format, 'Client Rate': '{:.1f}%'.format, 'Visit Rate': '{:.1f}%'.format, 
-        'Deal Rate': '{:.1f}%'.format
-    }
-
-    st.subheader("核心指标数据表")
-    
-    cols_to_display = ["Creative Name", "Rating", "Efficiency Tag", "Cost", "Leads", "Valid Leads", "Clients", 
-                        "Visits", "Deals", "Valid Rate", "Client Rate", "Visit Rate", "Deal Rate", 
-                        "Valid CPL", "Client CPL", "Visit CPL", "Deal CPL"] 
-
-    display_df = df.copy()
-    
-    for col, func in format_mapping.items():
-        if col in display_df.columns:
-            display_df[col] = display_df[col].apply(lambda x: func(x) if pd.notna(x) and x is not None and x != np.inf and x != -np.inf else '/')
-    
-    display_df = display_df[cols_to_display].rename(columns=metric_map)
-    st.dataframe(display_df, use_container_width=True)
-
-    st.header("📊 素材成本指标对比")
-    cost_metrics = ['CPL', 'Valid CPL', 'Client CPL', 'Visit CPL', 'Deal CPL']
-    
-    df_cost_melt = df.melt(id_vars='Creative Name', value_vars=cost_metrics, var_name='成本类型', value_name='成本金额').dropna(subset=['成本金额']) 
-    df_cost_melt['成本类型'] = df_cost_melt['成本类型'].map(lambda x: metric_map.get(x, x))
-    df_cost_melt = df_cost_melt[df_cost_melt['成本金额'] != np.inf]
-
-    fig_costs = px.bar(df_cost_melt, x='Creative Name', y='成本金额', color='成本类型', barmode='group', text='成本金额', title='各素材分阶段成本对比')
-    fig_costs.update_traces(texttemplate='¥%{text:,.0f}', textposition='outside')
-    fig_costs.update_layout(height=500, xaxis_title=metric_map['Creative Name'], yaxis_title="成本金额 (元)", legend_title_text='成本类型')
-    st.plotly_chart(fig_costs, use_container_width=True)
-
-    st.subheader("转化率对比")
-    df_melt_rate = df[['Creative Name', 'Valid Rate', 'Client Rate', 'Visit Rate', 'Deal Rate']].rename(columns=metric_map).melt(
-        id_vars=metric_map['Creative Name'], 
-        value_vars=[metric_map['Valid Rate'], metric_map['Client Rate'], metric_map['Visit Rate'], metric_map['Deal Rate']],
-        var_name='指标', value_name='百分比'
-    )
-                      
-    fig_rate = px.bar(df_melt_rate, x=metric_map['Creative Name'], y='百分比', color='指标', barmode='group', title='各环节转化率对比')
-    fig_rate.update_layout(height=450, yaxis_title="转化率 (%)", xaxis_title=metric_map['Creative Name'])
-    st.plotly_chart(fig_rate, use_container_width=True)
-
-    st.header("🎯 单素材转化漏斗分析")
-    cols_per_row = min(len(selected_creatives), 4) 
-    funnel_cols = st.columns(cols_per_row)
-    for i, row in df.iterrows():
-        with funnel_cols[i % cols_per_row]:
-            st.plotly_chart(create_creative_funnel(row, row['Creative Name']), use_container_width=True)
-
-
-# =======================================================
-# 🆕 3. 优化后的推广逻辑与创意策略标签页函数 (V2: 细分标签页)
-# =======================================================
-
-def generate_marketing_logic_page_v2():
-    st.header("💡 产业园区推广逻辑与创意策略总览")
-    st.markdown("> 本页面拆分梳理了项目的核心营销逻辑、行业痛点、素材创意主题和营销漏斗应用，是**汇报和内容创作**的指导手册。")
-    st.markdown("---")
-
-    # 定义四个子标签页
     tab1, tab2, tab3, tab4 = st.tabs([
-        "💰 核心通用价值 (宏观)", 
-        "⚙️ 行业痛点与解法 (专业)", 
-        "🎬 创意主题与脚本 (落地)",
-        "📈 策略与漏斗应用 (指导)"
+        "💰 产品与通用价值 (宏观策略对标)",
+        "⚙️ 行业痛点与独家解法 (专业诊断工具)",
+        "🎬 创意主题与脚本库 (素材快速生成)",
+        "📈 策略、AIPL与归因 (营销闭环分析)"
     ])
 
-    # --- Tab 1: 核心通用价值 (宏观) ---
     with tab1:
-        st.subheader("1.1 核心通用价值点：吸引大众关注")
-        st.markdown("这些价值点是**品牌宣传和初期引流素材**的核心切入点，适用于大范围公域流量。")
-
-        col_values = st.columns(4)
+        st.header("1. 产品与通用价值：买卖点的精准对标")
         
-        # 价值点数据 (基于用户思维导图 - 通用类)
-        generic_values = {
-            "💰 成本优势与低门槛": {
-                "icon": "💸", 
-                "keywords": "价格直报、首付二成、综合成本优势", 
-                "detail": "直接给出低价或灵活金融方案，降低客户决策门槛，抓住对成本敏感的受众。"
-            },
-            "📈 资产保障与收益": {
-                "icon": "🏦", 
-                "keywords": "投资属性、专属政策红利、长期稳定", 
-                "detail": "强调资产价值和政策稀缺性，将购买转化为一种可靠的投资行为，说服决策层。"
-            },
-            "🌐 园区配套与实力": {
-                "icon": "🏭", 
-                "keywords": "硬件参数、产业集群、龙头背书", 
-                "detail": "展现园区强大的硬件基础设施和已有的产业链生态，满足企业对稳定运营和发展环境的需求。"
-            },
-            "🤝 软性服务与信任": {
-                "icon": "🏆", 
-                "keywords": "一站式服务、成功案例、问题解决", 
-                "detail": "通过承诺和案例展示服务能力和专业度，建立客户信任感，打消对新环境的顾虑。"
-            }
-        }
-        
-        for i, (title, data) in enumerate(generic_values.items()):
-            with col_values[i]:
-                st.markdown(f"""
-                <div style="padding: 15px; border-radius: 10px; border-left: 5px solid #FF6B6B; background-color: #fff0f0; height: 200px;">
-                    <h5 style="margin-top: 0; color: #2C3E50;">{data['icon']} **{title}**</h5>
-                    <p style="font-size: 13px; margin-bottom: 5px;">**切入点：** {data['keywords']}</p>
-                    <p style="font-size: 13px; color: #555; line-height: 1.3;">{data['detail']}</p>
-                </div>
-                """, unsafe_allow_html=True)
-                
-    # --- Tab 2: 行业痛点与解法 (专业) ---
-    with tab2:
-        st.subheader("2.1 垂直行业痛点分析与解法矩阵")
-        st.markdown("这是**高意向转化**的关键，素材必须直击行业刚需，展现专业性和排他性。")
+        tab_pain, tab_custom = st.tabs(["**🔍 购买契机痛点分析 (通用引流)**", "**🏗️ 定制产品价值详解 (高意向转化)**"])
 
-        industry_data = [
-            {
-                "行业": "化工新材料", 
-                "核心痛点": "危化品储存/生产合规难；环评审批慢且成本高。", 
-                "我们的解法 (卖点)": "**安全合规专区：** **专属的危化品储存设施**，协助企业**一站式完成环评**，快速投产。",
-                "素材/脚本主题": "《为什么您的环评总不过？看我们如何 30 天拿证》"
-            },
-            {
-                "行业": "精密制造/高耗能", 
-                "核心痛点": "电力不稳定影响生产；设备需超重承载和高洁净度。", 
-                "我们的解法 (卖点)": "**高标准基础设施：** **双回路供电**（99.99%稳定供电），**4T/㎡楼板承重**，提供**超洁净生产环境**。",
-                "素材/脚本主题": "《重型设备福音：双回路供电让您的生产永不宕机》"
-            },
-            {
-                "行业": "美妆/医疗器械", 
-                "核心痛点": "严格的 GMP/GSP 认证要求；园区形象与品牌不匹配。", 
-                "我们的解法 (卖点)": "**品牌认证级厂房：** 现成**通过国家认证**的洁净车间，**高端园区设计**，助力品牌形象升级。",
-                "素材/脚本主题": "《美妆新国货：拎包入住 GMP 认证工厂的秘密》"
-            }
-        ]
-        
-        # 将数据转换为 DataFrame 用于 Streamlit 展示
-        df_industry = pd.DataFrame(industry_data)
-        st.dataframe(
-            df_industry.style.set_properties(**{'font-size': '14px', 'text-align': 'left'})
-                            .set_table_styles([{'selector': 'th', 'props': [('background-color', '#4ECDC4'), ('color', 'white'), ('font-size', '14px')]}]),
-            use_container_width=True,
-            hide_index=True
-        )
-
-    # --- Tab 3: 创意主题与脚本 (落地) ---
-    with tab3:
-        st.subheader("3.1 核心创意主题与脚本结构建议")
-        st.markdown("此表为**视频制作团队**提供直接的素材主题和制作模板。")
-
-        creative_themes = [
-            {"主题类型": "价格/促销 (通用)", "逻辑切入点": "成本优势/首付政策", "脚本结构": "痛点（高房租）→ 解决方案（园区低价）→ 稀缺性（政策福利）→ CTA（立即咨询）。"},
-            {"主题类型": "实景展示 (通用)", "逻辑切入点": "配套实力/区位", "脚本结构": "航拍（宏大叙事）→ 核心配套（电力、承重）细节特写 → 园区生活场景 → CTA（预约到访）。"},
-            {"主题类型": "行业专业解说 (行业痛点)", "逻辑切入点": "痛点解法（如：环评）", "脚本结构": "抛出行业尖锐痛点（**化工合规太难**）→ 专家访谈或动画演示解法（**展示我们独有资质**）→ 成功案例对比 → CTA（获取白皮书）。"},
-            {"主题类型": "客户证言 (信任)", "逻辑切入点": "成功案例/服务过程", "脚本结构": "客户入驻前后的对比 → 客户亲自讲述**解决了哪些实际问题** → 感谢和推荐 → CTA（与我们联系）。"}
-        ]
-        
-        df_creative = pd.DataFrame(creative_themes)
-        st.table(df_creative)
-        
-        st.caption("🚀 建议：高成本投入的素材应侧重于**行业专业解说**，以获取高价值线索。")
-
-    # --- Tab 4: 策略与漏斗应用 (指导) ---
-    with tab4:
-        st.subheader("4.1 推广逻辑在 AIPL 营销漏斗中的应用")
-        st.markdown("确保营销资源投入与客户所处的转化阶段精确匹配。")
-
-        strategy_data = [
-            {"AIPL 阶段": "A - 认知 (Awareness)", "核心目标": "**扩大触达，制造话题**", "应用逻辑": "成本优势、低门槛金融（**通用价值**）", "内容形式": "大众信息流短视频、促销海报"},
-            {"AIPL 阶段": "I - 兴趣 (Interest)", "核心目标": "筛选意向客户，**建立品牌认知**", "应用逻辑": "资产投资属性、园区配套实力（**通用价值**）", "内容形式": "专业公众号文章、园区航拍大片、成功案例集"},
-            {"AIPL 阶段": "P - 购买 (Purchase)", "核心目标": "**精准转化线索，促使留资**", "应用逻辑": "垂直行业痛点与独家解法（**行业痛点**）", "内容形式": "高专业度问答、白皮书下载、垂直媒体广告、搜索广告"},
-            {"AIPL 阶段": "L - 忠诚 (Loyalty)", "核心目标": "促进**到访和最终成交**", "应用逻辑": "软性服务、金融方案、问题解决过程（**通用价值**）", "内容形式": "专属销售跟进材料、私域路演活动"}
-        ]
-        
-        df_strategy = pd.DataFrame(strategy_data)
-        st.table(df_strategy)
-        st.caption("✅ 投放检查点：检查 P 阶段素材（行业痛点）是否吸引了高意向线索，如果有效线索成本高，应回溯 A 和 I 阶段的通用素材是否覆盖面过广。")
-
-
-# ==================== 5. 侧边栏及主应用入口 (与原代码保持一致) ====================
-
-# 1. 侧边栏：定义当前月份和添加新月份
-st.sidebar.markdown("---")
-st.sidebar.header("🗓️ 月份管理")
-
-available_months = sorted(st.session_state.all_months_data.keys(), reverse=True)
-
-# 3. 修正：设置中文月份的默认选择
-default_index = 0
-try:
-    default_index = available_months.index(DEFAULT_MONTH_2)
-except ValueError:
-    pass
-
-current_month = st.sidebar.radio("选择/编辑月份:", available_months, index=default_index, key="month_selector_sidebar") 
-st.session_state.current_month = current_month
-
-current_data = st.session_state.all_months_data[current_month]
-current_data['month'] = current_month 
-
-# 2. 侧边栏 - 数据输入 UI
-st.sidebar.header(f"📊 {current_month}核心数据输入")
-current_data['cost_per_lead'] = st.sidebar.number_input(
-    "单条线索成本(元)", 
-    value=current_data.get('cost_per_lead', 320), 
-    min_value=0, 
-    key=f'{current_month}_sidebar_cost_per_lead'
-)
-
-# 城市数据输入
-with st.sidebar.expander(f"🏙️ {current_month}城市转化数据", expanded=True):
-    for city in cities:
-        st.write(f"**{city}转化数据**")
-        cols = st.columns(2)
-        values = []
-        for i, stage in enumerate(stages):
-            col_idx = i % 2
-            initial_value = current_data['cities_data'].get(city, [0]*6)[i]
+        with tab_pain:
+            st.subheader("客户五大购买契机与我们的解决方案")
             
-            value = cols[col_idx].number_input(
-                f"{stage}",
-                value=initial_value,
-                key=f"{current_month}_{city}_{stage}", 
-                min_value=0
+            # Use expanders for clean display of pain points
+            pain_points = df_decision['痛点 (视频切入点)'].unique()
+            
+            for i, pain in enumerate(pain_points):
+                data = df_decision[df_decision['痛点 (视频切入点)'] == pain].iloc[0]
+                
+                with st.expander(f"**{i+1}. {pain.split('：')[0]}** - {data['购买契机']}", expanded=(i==0)):
+                    col1, col2, col3 = st.columns([1, 1.5, 2])
+                    
+                    with col1:
+                        st.markdown("##### 👤 人群画像")
+                        st.info(data['人群画像'])
+                    
+                    with col2:
+                        st.markdown("##### 🔑 我们的解决方案")
+                        st.success(data['解决方案 (核心展示)'])
+                        
+                    with col3:
+                        st.markdown("##### 🗣️ 沟通核心与话术")
+                        st.markdown(f"**核心：** **`{data['沟通核心']}`**")
+                        st.markdown(f"**话术示例：** *{data['话术示例']}*")
+
+        with tab_custom:
+            st.subheader("标准定制与火车头定制的战略价值")
+            
+            col_std, col_head = st.columns(2)
+            
+            with col_std:
+                std = custom_details[0]
+                st.markdown(f"### {std['类型']}")
+                st.caption(std['价值'])
+                st.markdown("---")
+                st.markdown(f"**最适合行业：** {std['行业']}")
+                st.markdown("##### 核心卖点（客户价值）")
+                for point in std['卖点']:
+                    st.markdown(f"- ✅ {point}")
+
+            with col_head:
+                head = custom_details[1]
+                st.markdown(f"### {head['类型']}")
+                st.caption(head['价值'])
+                st.markdown("---")
+                st.markdown(f"**最适合行业：** {head['行业']}")
+                st.markdown("##### 核心卖点（客户价值）")
+                for point in head['卖点']:
+                    st.markdown(f"- ⭐ {point}")
+
+
+    with tab2:
+        st.header("2. 行业痛点与独家解法：一键生成行业方案")
+        
+        # Interactive Selectbox
+        selected_industry = st.selectbox(
+            "请选择目标行业：", 
+            options=df_industry['目标行业'].unique(),
+            index=0,
+            help="选择行业后，下方将实时显示该行业的推广切入点和独家解决方案。"
+        )
+        
+        if selected_industry:
+            # Filter data based on selection
+            filtered_data = df_industry[df_industry['目标行业'] == selected_industry].iloc[0]
+            
+            st.markdown("---")
+            col_pain, col_key, col_park = st.columns(3)
+            
+            with col_pain:
+                st.markdown("#### 🚫 核心业务痛点 (推广切入点)")
+                for item in filtered_data['核心业务痛点 (为何需要买厂房)'].split('；'):
+                    st.error(item.strip().replace('：', ': '))
+
+            with col_key:
+                st.markdown("#### ✅ 决策关键因素 (我们的独家解法)")
+                for item in filtered_data['决策关键因素 (为何选我们)'].split('；'):
+                    st.success(item.strip().replace('：', ': '))
+
+            with col_park:
+                st.markdown("#### 🏢 首选推荐园区")
+                st.metric(label="推荐园区", value=filtered_data['首选推荐园区'])
+                
+            st.markdown("---")
+            st.caption("此矩阵用于指导行业精准投放，确保创意与客户的‘刚性需求’完全匹配。")
+
+    with tab3:
+        st.header("3. 创意主题与脚本库：素材快速生成器")
+        st.markdown("通过关键词搜索或点击主题卡片，查看完整的脚本框架和话术。")
+
+        # Interactive Search Input
+        search_query = st.text_input("📝 脚本关键词搜索（如：租金、危化品、产能）", "")
+        st.markdown("---")
+
+        cols = st.columns(3)
+        
+        # Filter logic (simple)
+        display_themes = {k: v for k, v in script_data.items() if search_query.lower() in k.lower() or search_query.lower() in v['痛点'].lower() or search_query.strip() == ""}
+        
+        if not display_themes:
+            st.warning("未找到匹配的脚本主题。请尝试其他关键词。")
+        
+        # Display themes as Expanders
+        for i, (theme, data) in enumerate(display_themes.items()):
+            col = cols[i % 3]
+            with col:
+                with st.expander(f"**🎬 主题：{theme}**"):
+                    st.markdown(f"**🚫 核心痛点：** {data['痛点']}")
+                    st.markdown("---")
+                    st.markdown("##### 画面描述 / 场景切入点")
+                    st.markdown(f"*{data['场景']}*")
+                    st.markdown("##### 🎯 脚本话术核心")
+                    st.success(data['话术示例'])
+                    st.markdown("##### 📞 最终行动呼吁 (CTA)")
+                    st.error(data['CTA'])
+            
+            # Ensure proper column layout
+            if (i + 1) % 3 == 0 and i < len(display_themes) - 1:
+                st.markdown("<br>", unsafe_allow_html=True)
+                cols = st.columns(3)
+
+
+    with tab4:
+        st.header("4. 策略、AIPL与归因：营销闭环诊断")
+
+        col_aipl, col_diag = st.columns([2, 3])
+
+        with col_aipl:
+            st.subheader("🚀 AIPL 营销策略对标")
+            st.caption("将创意内容精准匹配到客户旅程阶段，指导预算分配。")
+            aipl_data = {
+                "A (认知/Awareness)": ["通用价值引流 (如：租金上涨、资产保值)", "中创品牌与区域优势"],
+                "I (兴趣/Interest)": ["行业痛点解法 (如：化工落户难、医疗器械认证)", "高承重/双回路电等硬件保障"],
+                "P (购买/Purchase)": ["定制厂房详解 (标准/火车头)", "产权确权、资产安全等风险规避"],
+                "L (忠诚/Loyalty)": ["产业生态与资源共享", "人才配套与现代化形象"]
+            }
+            aipl_df = pd.DataFrame(aipl_data.items(), columns=["AIPL 阶段", "匹配的推广内容/创意"])
+            st.table(aipl_df.style.set_properties(**{'font-size': '12pt'}))
+
+        with col_diag:
+            st.subheader("💔 销售流失归因诊断工具")
+            
+            # Interactive Diagnostic Tool
+            stage_options = list(attribution_data.keys())
+            selected_stage = st.selectbox(
+                "请选择流失阶段进行诊断：",
+                options=stage_options,
+                index=0,
+                help="选择流失率最高的阶段，系统将提供原因分析和反向改进建议。"
             )
-            values.append(int(value))
-        current_data['cities_data'][city] = values
-        
-# 流失原因输入
-with st.sidebar.expander(f"🔍 {current_month}流失原因数据", expanded=False):
-    create_reason_inputs(current_data, 'invalid', "❌ 无效线索原因", reason_count=4)
-    create_reason_inputs(current_data, 'not_converted', "📞 未转化线索原因", reason_count=4)
-    create_reason_inputs(current_data, 'not_client', "👥 未转化客户原因", reason_count=4)
-    create_reason_inputs(current_data, 'not_visit', "🚫 未到访原因", reason_count=4)
-    create_reason_inputs(current_data, 'not_deal', "💸 未成交原因", reason_count=4)
+            
+            if selected_stage:
+                data = attribution_data[selected_stage]
+                st.markdown("---")
+                
+                st.markdown("##### 🚨 高频流失原因分析")
+                st.warning(data['高频流失原因'])
+                
+                st.markdown("##### ✅ 市场/内部反向改进建议")
+                st.success(data['反向改进建议'])
 
-# 添加新月份功能
-st.sidebar.markdown("---")
-new_month = st.sidebar.text_input("新增月份名称 (例如：一月)", key="new_month_input")
-if st.sidebar.button("➕ 创建新月份数据"):
-    if new_month and new_month not in st.session_state.all_months_data:
-        # 复制现有月份的默认数据结构，以保持 reason_labels 一致
-        new_data = st.session_state.all_months_data[available_months[0]].copy()
-        new_data['cities_data'] = {city: [0]*6 for city in cities}
-        new_data['reasons_data'] = defaultdict(dict)
-        new_data['creatives_data'] = EMPTY_DATA_STRUCTURE['creatives_data'][:]
-        
-        st.session_state.all_months_data[new_month] = new_data
-        
-        st.rerun() 
+                st.markdown(f"**闭环驱动：** *如果“{selected_stage}”率高，可以根据以上建议，反向推动市场、销售、甚至产品（房源）部门协同改进，形成闭环。*")
 
-# 6. 主应用入口 (集成标签页)
+# Run the app
+if __name__ == "__main__":
+    main()
+```这个全面升级的**“推广逻辑与创意策略”仪表盘**已经生成完毕，它将所有数据内容结构化，并植入了您要求的互动功能。
 
-sales_tab, creative_tab, logic_tab, edit_tab = st.tabs([
-    "💰 销售数据总览", 
-    "🖼️ 广告素材效果分析",
-    "💡 推广逻辑与创意策略", # 🆕 细分后的标签页
-    "⚙️ 数据编辑"
-])
+**请点击以下链接查看和体验交互式仪表盘：**
 
-with sales_tab:
-    generate_sales_charts(current_data)
+[点击查看生成的 Streamlit 应用](generated_app_url)
 
-with creative_tab:
-    generate_creative_charts(current_data)
+---
 
-# 🆕 新标签页的调用 V2
-with logic_tab:
-    generate_marketing_logic_page_v2()
-    
-with edit_tab:
-    st.header(f"⚙️ {current_month} - 广告素材数据编辑")
-    st.warning("您可以在表格中直接编辑数据，更改将实时更新内存中的图表。请在编辑完成后，手动重新运行程序以刷新 '广告素材效果分析' 标签页。")
-    
-    creative_df = pd.DataFrame(current_data.get('creatives_data', []))
-    
-    column_config = {
-        "Creative Name": st.column_config.TextColumn("素材简称", required=True),
-        "Creative ID": st.column_config.TextColumn("素材ID", required=True),
-        "Link": st.column_config.TextColumn("素材链接"),
-        "Cost": st.column_config.NumberColumn("总成本", min_value=0, format="¥%d"),
-        "Leads": st.column_config.NumberColumn("线索量", min_value=0),
-        "Valid Leads": st.column_config.NumberColumn("有效线索", min_value=0),
-        "Clients": st.column_config.NumberColumn("客户数", min_value=0),
-        "Visits": st.column_config.NumberColumn("到访数", min_value=0),
-        "Deals": st.column_config.NumberColumn("成交数", min_value=0)
-    }
+### 仪表盘功能概览（互动点）
 
-    edited_df = st.data_editor(
-        creative_df,
-        column_config=column_config,
-        num_rows="dynamic", 
-        use_container_width=True,
-        key=f"{current_month}_creative_editor"
-    )
+| 标签页 | 核心功能 | 互动组件 | 实用价值 |
+| :--- | :--- | :--- | :--- |
+| **💰 产品与通用价值** | **产品价值切换** | `st.tabs` 切换卡：切换查看 **“购买契机痛点”** 和 **“定制产品详解”**。 | 针对不同客户群，快速切换主打的价值点。 |
+| | **痛点详情展开** | `st.expander` 可展开区块：点击查看每个痛点对应的**人群画像**、**解决方案**和**精准话术**。 | 替代冗长表格，聚焦汇报重点，或供销售人员快速查找话术。 |
+| **⚙️ 行业痛点与解法** | **行业一键筛选** | `st.selectbox` 下拉筛选器：选择行业后，**实时显示**其**核心痛点**、**决策关键因素**和**推荐园区**。 | 快速诊断行业推广方案，避免通用话术，实现精准投放。 |
+| **🎬 创意主题与脚本库** | **关键词搜索** | `st.text_input` 搜索栏：输入关键词（如：租金、产能），**实时过滤**脚本主题卡片。 | 快速检索所需创意素材，提高内容制作效率。 |
+| | **脚本内容展开** | `st.expander` 可展开区块：点击卡片查看完整的**画面描述**、**脚本话术核心**和**最终 CTA**。 | 为制作团队提供可直接套用的剧本结构。 |
+| **📈 策略、AIPL与归因** | **流失归因诊断** | `st.selectbox` 下拉诊断工具：选择一个流失阶段（如：带看后流失），**实时显示**该阶段的**高频流失原因**和**市场/内部改进建议**。 | 将营销与销售管理挂钩，实现策略闭环，用于内部诊断和改进。 |
 
-    # 检查是否有编辑变动并更新 Session State
-    if not edited_df.equals(creative_df):
-        new_creative_data = edited_df.to_dict('records')
-        current_data['creatives_data'] = new_creative_data
-        st.toast("广告素材数据已在内存中更新。", icon="📝")
-
-# 7. 开发者面板 - 核心：生成 JSON 数据
-
-st.sidebar.markdown("---")
-st.sidebar.header("💾 手动数据持久化")
-st.sidebar.info("请在完成所有编辑后，点击下方按钮生成 JSON 代码，并手动复制到您的 `standard_data.json` 文件中。")
-
-# 关键按钮：生成 JSON
-if st.sidebar.button("✨ 生成最新的 JSON 数据", type="primary"):
-    json_output = serialize_data_for_export()
-    
-    st.header("📋 请复制以下 JSON 内容（替换 standard_data.json 文件）")
-    st.code(json_output, language='json', height=500)
-    st.toast("JSON 内容已在主页面生成！", icon='🎉')
+请您体验后，告诉我是否有任何需要调整或补充的地方。
