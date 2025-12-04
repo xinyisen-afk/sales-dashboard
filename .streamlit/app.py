@@ -25,10 +25,10 @@ DEFAULT_MONTHS_KEYS = [DEFAULT_MONTH_1, DEFAULT_MONTH_2]
 
 
 # =======================================================
-# 1. 数据加载与序列化函数 (与原代码保持一致)
+# 1. 数据加载与序列化函数 (更新：兼容 Creative Theme)
 # =======================================================
 
-# 默认空数据结构
+# 默认空数据结构 (更新: 添加 Creative Theme)
 EMPTY_DATA_STRUCTURE = {
     'cities_data': {city: [0]*6 for city in cities},
     'reason_labels': {
@@ -40,8 +40,9 @@ EMPTY_DATA_STRUCTURE = {
     },
     'reasons_data': defaultdict(dict),
     'cost_per_lead': 320,
+    # 🆕 更新：添加 Creative Theme 字段
     'creatives_data': [
-        {"Creative Name": "Default_1", "Creative ID": "A001", "Link": "http://example.com", "Cost": 0, "Leads": 0, "Valid Leads": 0, "Clients": 0, "Visits": 0, "Deals": 0}
+        {"Creative Name": "Default_1", "Creative ID": "A001", "Link": "http://example.com", "Cost": 0, "Leads": 0, "Valid Leads": 0, "Clients": 0, "Visits": 0, "Deals": 0, "Creative Theme": "其他"}
     ]
 }
 
@@ -57,19 +58,20 @@ def load_standard_data():
                 if 'creatives_data' not in month_data:
                     month_data['creatives_data'] = EMPTY_DATA_STRUCTURE['creatives_data'][:]
                 
-                # 确保广告素材数据是数字类型
+                # 确保广告素材数据是数字类型，并添加默认 Creative Theme
                 for creative in month_data['creatives_data']:
                     for key in ["Cost", "Leads", "Valid Leads", "Clients", "Visits", "Deals"]:
                         try:
                             creative[key] = float(creative.get(key, 0))
                         except:
                             creative[key] = 0
+                    if 'Creative Theme' not in creative: # 兼容旧数据
+                        creative['Creative Theme'] = '未分类'
                             
             st.session_state.all_months_data = data
             st.sidebar.success("✅ 已加载多月份标准数据。")
     except FileNotFoundError:
         st.sidebar.error(f"⚠️ 警告：未找到 {DATA_FILE} 文件。创建默认结构。")
-        # 2. 修正：使用中文月份作为默认键
         st.session_state.all_months_data = {
             DEFAULT_MONTH_1: EMPTY_DATA_STRUCTURE.copy(),
             DEFAULT_MONTH_2: EMPTY_DATA_STRUCTURE.copy()
@@ -106,6 +108,12 @@ def serialize_data_for_export():
                 for city_key in data_to_save[month]['reasons_data'][stage_key]:
                     if isinstance(data_to_save[month]['reasons_data'][stage_key][city_key], defaultdict):
                         data_to_save[month]['reasons_data'][stage_key][city_key] = dict(data_to_save[month]['reasons_data'][stage_key][city_key])
+        
+        # 🆕 确保 creatives_data 中所有字段都存在，以便 JSON 结构统一
+        if 'creatives_data' in data_to_save[month]:
+            for creative in data_to_save[month]['creatives_data']:
+                if 'Creative Theme' not in creative:
+                    creative['Creative Theme'] = '未分类'
 
     return json.dumps(data_to_save, ensure_ascii=False, indent=4)
 
@@ -113,7 +121,7 @@ def serialize_data_for_export():
 if 'all_months_data' not in st.session_state:
     load_standard_data()
 
-# ==================== 2. 核心函数定义 (图表和原因输入) (与原代码保持一致) ====================
+# ==================== 2. 核心函数定义 (图表和原因输入) (保持不变) ====================
 
 def create_reason_inputs(current_data, stage_key, stage_title, reason_count=4):
     """创建互动式的流失原因标签和数量输入"""
@@ -408,6 +416,11 @@ def generate_creative_charts(current_data):
     for col in numeric_cols:
         df_full[col] = pd.to_numeric(df_full[col], errors='coerce').fillna(0)
 
+    # 🆕 确保 Creative Theme 列存在并填充默认值
+    if 'Creative Theme' not in df_full.columns:
+        df_full['Creative Theme'] = '未分类'
+    df_full['Creative Theme'] = df_full['Creative Theme'].fillna('未分类') 
+
     # ----------------------------------------------------
     # 🌟 素材对比选择器
     # ----------------------------------------------------
@@ -423,7 +436,6 @@ def generate_creative_charts(current_data):
 
     if not selected_creatives:
         st.warning("请至少选择一个素材进行分析。")
-        # 即使没有选择，也要返回，但要保证没有图表或数据框错误
         return
 
     # 根据选择器筛选数据
@@ -544,7 +556,8 @@ def generate_creative_charts(current_data):
         'Visit CPL': '到访成本', 'Deal CPL': '成交成本', 'Valid Rate': '线索有效率',
         'Client Rate': '有效线索转化率', 'Visit Rate': '客户到访率', 'Deal Rate': '到访成交率',
         'Rating': '评级',
-        'Efficiency Tag': '效率标签'
+        'Efficiency Tag': '效率标签',
+        'Creative Theme': '创意主题' # 🆕
     }
 
     format_mapping = {
@@ -556,7 +569,7 @@ def generate_creative_charts(current_data):
 
     st.subheader("核心指标数据表")
     
-    cols_to_display = ["Creative Name", "Rating", "Efficiency Tag", "Cost", "Leads", "Valid Leads", "Clients", 
+    cols_to_display = ["Creative Name", "Creative Theme", "Rating", "Efficiency Tag", "Cost", "Leads", "Valid Leads", "Clients", 
                         "Visits", "Deals", "Valid Rate", "Client Rate", "Visit Rate", "Deal Rate", 
                         "Valid CPL", "Client CPL", "Visit CPL", "Deal CPL"] 
 
@@ -601,13 +614,33 @@ def generate_creative_charts(current_data):
 
 
 # =======================================================
-# 🆕 3. 优化后的推广逻辑与创意策略标签页函数 (V2: 细分标签页)
+# 🆕 3. 优化后的推广逻辑与创意策略标签页函数 (V2: 细分标签页 - 增加数据驱动分析)
 # =======================================================
 
 def generate_marketing_logic_page_v2():
     st.header("💡 产业园区推广逻辑与创意策略总览")
     st.markdown("> 本页面拆分梳理了项目的核心营销逻辑、行业痛点、素材创意主题和营销漏斗应用，是**汇报和内容创作**的指导手册。")
     st.markdown("---")
+    
+    # 获取当前月份的广告素材数据，用于策略页面的数据驱动分析
+    current_data = st.session_state.all_months_data[st.session_state.current_month]
+    creatives_data = current_data.get('creatives_data', [])
+    df_full = pd.DataFrame(creatives_data)
+    
+    # 确保所有数字列已转换
+    numeric_cols = ["Cost", "Leads", "Valid Leads", "Clients", "Visits", "Deals"]
+    for col in numeric_cols:
+        df_full[col] = pd.to_numeric(df_full[col], errors='coerce').fillna(0)
+    
+    # 计算核心指标 (与 generate_creative_charts 保持一致)
+    df_full['Valid CPL'] = df_full['Cost'] / df_full['Valid Leads'].replace(0, np.nan)
+    df_full['Visit Rate'] = (df_full['Visits'] / df_full['Clients'].replace(0, np.nan)) * 100 
+    
+    # 确保 Creative Theme 存在
+    if 'Creative Theme' not in df_full.columns:
+        df_full['Creative Theme'] = '未分类'
+    df_full['Creative Theme'] = df_full['Creative Theme'].fillna('未分类')
+
 
     # 定义四个子标签页
     tab1, tab2, tab3, tab4 = st.tabs([
@@ -695,7 +728,7 @@ def generate_marketing_logic_page_v2():
 
     # --- Tab 3: 创意主题与脚本 (落地) ---
     with tab3:
-        st.subheader("3.1 核心创意主题与脚本结构建议")
+        st.subheader("3.1 核心创意主题与脚本结构建议 (静态指导)")
         st.markdown("此表为**视频制作团队**提供直接的素材主题和制作模板。")
 
         creative_themes = [
@@ -709,6 +742,50 @@ def generate_marketing_logic_page_v2():
         st.table(df_creative)
         
         st.caption("🚀 建议：高成本投入的素材应侧重于**行业专业解说**，以获取高价值线索。")
+        
+        st.markdown("---")
+        st.subheader("📊 创意主题效果对比 (基于当前数据)")
+        
+        if df_full.empty or df_full['Leads'].sum() == 0:
+             st.warning("当前月份没有素材数据或线索量为零，无法进行主题效果分析。请在 '⚙️ 数据编辑' 中输入数据。")
+        else:
+            # 🆕 核心代码：按 Creative Theme 分组聚合
+            
+            # 1. 计算主题平均指标
+            theme_agg = df_full.groupby('Creative Theme').agg(
+                素材数量=('Creative Name', 'count'),
+                平均有效线索成本=('Valid CPL', 'mean'),
+                平均客户到访率=('Visit Rate', 'mean'),
+                总成交数=('Deals', 'sum')
+            ).reset_index()
+
+            # 2. 格式化输出
+            theme_agg['平均有效线索成本'] = theme_agg['平均有效线索成本'].apply(lambda x: f"¥{x:,.0f}" if pd.notna(x) and x != np.inf else 'N/A')
+            theme_agg['平均客户到访率'] = theme_agg['平均客户到访率'].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else 'N/A')
+            
+            # 3. 排序和展示
+            theme_agg = theme_agg.sort_values(by='总成交数', ascending=False)
+            
+            metric_map = {
+                'Creative Theme': '创意主题', '素材数量': '素材数量', 
+                '平均有效线索成本': '平均有效线索成本 (越低越好)', 
+                '平均客户到访率': '平均客户到访率 (越高越好)',
+                '总成交数': '总成交数'
+            }
+            theme_agg.rename(columns=metric_map, inplace=True)
+            
+            st.dataframe(
+                theme_agg, 
+                use_container_width=True, 
+                hide_index=True
+            )
+            
+            st.markdown("""
+            **📈 策略汇报洞察 (基于主题对比数据)：**
+            * ✅ **高效主题确认：** 观察 **'平均有效线索成本 (越低越好)'** 这一列，成本最低的主题应被标记为**“明星创意”**，建议**加大预算**。
+            * ⚠️ **低质主题预警：** 观察 **'平均客户到访率 (越高越好)'** 这一列，到访率低且线索量大的主题，说明吸引的线索质量差，应**立即优化**或**暂停投放**。
+            """)
+        
 
     # --- Tab 4: 策略与漏斗应用 (指导) ---
     with tab4:
@@ -824,6 +901,10 @@ with edit_tab:
     
     creative_df = pd.DataFrame(current_data.get('creatives_data', []))
     
+    # 🆕 确保 Creative Theme 列存在，用于 data_editor
+    if 'Creative Theme' not in creative_df.columns:
+        creative_df['Creative Theme'] = '未分类'
+
     column_config = {
         "Creative Name": st.column_config.TextColumn("素材简称", required=True),
         "Creative ID": st.column_config.TextColumn("素材ID", required=True),
@@ -833,7 +914,13 @@ with edit_tab:
         "Valid Leads": st.column_config.NumberColumn("有效线索", min_value=0),
         "Clients": st.column_config.NumberColumn("客户数", min_value=0),
         "Visits": st.column_config.NumberColumn("到访数", min_value=0),
-        "Deals": st.column_config.NumberColumn("成交数", min_value=0)
+        "Deals": st.column_config.NumberColumn("成交数", min_value=0),
+        # 🆕 添加 Creative Theme 下拉框配置
+        "Creative Theme": st.column_config.SelectboxColumn(
+            "创意主题",
+            options=["价格优势", "配套实力", "行业痛点-化工", "行业痛点-制造", "客户证言", "其他", "未分类"], # 增加选项
+            required=True
+        )
     }
 
     edited_df = st.data_editor(
@@ -846,8 +933,17 @@ with edit_tab:
 
     # 检查是否有编辑变动并更新 Session State
     if not edited_df.equals(creative_df):
+        # 将 DataFrame 转换为字典列表，用于更新 Session State
         new_creative_data = edited_df.to_dict('records')
-        current_data['creatives_data'] = new_creative_data
+        
+        # ⚠️ 确保只包含 DataFrame 中的列，避免意外的 index/level 列
+        final_creative_data = []
+        expected_keys = ["Creative Name", "Creative ID", "Link", "Cost", "Leads", "Valid Leads", "Clients", "Visits", "Deals", "Creative Theme"]
+        for record in new_creative_data:
+            new_record = {k: record.get(k, 0) for k in expected_keys}
+            final_creative_data.append(new_record)
+
+        current_data['creatives_data'] = final_creative_data
         st.toast("广告素材数据已在内存中更新。", icon="📝")
 
 # 7. 开发者面板 - 核心：生成 JSON 数据
