@@ -601,106 +601,130 @@ def generate_creative_charts(current_data):
 
 
 # =======================================================
-# 🆕 3. 新增：推广逻辑与创意策略标签页函数
+# 🆕 3. 优化后的推广逻辑与创意策略标签页函数 (V2: 细分标签页)
 # =======================================================
 
-def generate_marketing_logic_page():
+def generate_marketing_logic_page_v2():
     st.header("💡 产业园区推广逻辑与创意策略总览")
-    st.markdown("> 本页面梳理了项目的核心营销逻辑（素材类型）与目标客户痛点，为市场推广、内容制作和销售演示提供统一的指导框架。")
+    st.markdown("> 本页面拆分梳理了项目的核心营销逻辑、行业痛点、素材创意主题和营销漏斗应用，是**汇报和内容创作**的指导手册。")
     st.markdown("---")
 
-    # --- 模块 1: 通用价值 - 解决客户核心关注点 ---
-    st.subheader("1️⃣ 核心通用价值 (面向所有潜在客户)")
-    st.markdown("这些价值点是**品牌宣传、初期引流和公域流量素材**的核心切入点。")
+    # 定义四个子标签页
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "💰 核心通用价值 (宏观)", 
+        "⚙️ 行业痛点与解法 (专业)", 
+        "🎬 创意主题与脚本 (落地)",
+        "📈 策略与漏斗应用 (指导)"
+    ])
 
-    col_values = st.columns(4)
-    
-    # 价值点数据 (基于用户思维导图 - 通用类)
-    generic_values = {
-        "💰 综合成本优势": {
-            "icon": "💸", 
-            "keywords": "价格便宜, 直接报价, 综合成本优势", 
-            "detail": "通过规模化运营、政策红利和效率提升，实现整体成本低于行业平均水平。"
-        },
-        "📈 投资与资产属性": {
-            "icon": "🏦", 
-            "keywords": "投资资产属性, 专属政策红利, 一站式服务", 
-            "detail": "不仅仅是租赁，更是优质资产投资。享受政府政策支持和全流程金融服务，保障长期收益。"
-        },
-        "🌐 产业生态与实力": {
-            "icon": "🏭", 
-            "keywords": "园区实力, 产业链聚集, 龙头企业案例", 
-            "detail": "成熟的产业生态圈，上下游协作方便；硬件参数过硬，保障稳定生产（电力、承重、物流）。"
-        },
-        "🤝 信任与成功背书": {
-            "icon": "🏆", 
-            "keywords": "标杆客户成功案例, 问题解决过程, 首付二成起", 
-            "detail": "用成功的客户故事建立信任，展示专业的服务能力和灵活的金融方案，降低入驻门槛。"
+    # --- Tab 1: 核心通用价值 (宏观) ---
+    with tab1:
+        st.subheader("1.1 核心通用价值点：吸引大众关注")
+        st.markdown("这些价值点是**品牌宣传和初期引流素材**的核心切入点，适用于大范围公域流量。")
+
+        col_values = st.columns(4)
+        
+        # 价值点数据 (基于用户思维导图 - 通用类)
+        generic_values = {
+            "💰 成本优势与低门槛": {
+                "icon": "💸", 
+                "keywords": "价格直报、首付二成、综合成本优势", 
+                "detail": "直接给出低价或灵活金融方案，降低客户决策门槛，抓住对成本敏感的受众。"
+            },
+            "📈 资产保障与收益": {
+                "icon": "🏦", 
+                "keywords": "投资属性、专属政策红利、长期稳定", 
+                "detail": "强调资产价值和政策稀缺性，将购买转化为一种可靠的投资行为，说服决策层。"
+            },
+            "🌐 园区配套与实力": {
+                "icon": "🏭", 
+                "keywords": "硬件参数、产业集群、龙头背书", 
+                "detail": "展现园区强大的硬件基础设施和已有的产业链生态，满足企业对稳定运营和发展环境的需求。"
+            },
+            "🤝 软性服务与信任": {
+                "icon": "🏆", 
+                "keywords": "一站式服务、成功案例、问题解决", 
+                "detail": "通过承诺和案例展示服务能力和专业度，建立客户信任感，打消对新环境的顾虑。"
+            }
         }
-    }
-    
-    for i, (title, data) in enumerate(generic_values.items()):
-        with col_values[i]:
-            st.markdown(f"""
-            <div style="padding: 15px; border-radius: 10px; border-left: 5px solid #4ECDC4; background-color: #f7f7f7; height: 180px;">
-                <h4 style="margin-top: 0; color: #2C3E50;">{data['icon']} {title}</h4>
-                <p style="font-size: 14px;">**关键词：** {data['keywords']}</p>
-                <p style="font-size: 13px; color: #555;">{data['detail']}</p>
-            </div>
-            """, unsafe_allow_html=True)
-    
-    st.markdown("---")
-    
-    # --- 模块 2: 行业痛点与精准解法 - 核心可落地内容 ---
-    st.subheader("2️⃣ 行业痛点与精准解决方案 (专业化、可落地)")
-    st.markdown("这是**高意向线索**转化和**垂直媒体**投放的核心内容，要求素材高度专业，直击行业刚需。")
+        
+        for i, (title, data) in enumerate(generic_values.items()):
+            with col_values[i]:
+                st.markdown(f"""
+                <div style="padding: 15px; border-radius: 10px; border-left: 5px solid #FF6B6B; background-color: #fff0f0; height: 200px;">
+                    <h5 style="margin-top: 0; color: #2C3E50;">{data['icon']} **{title}**</h5>
+                    <p style="font-size: 13px; margin-bottom: 5px;">**切入点：** {data['keywords']}</p>
+                    <p style="font-size: 13px; color: #555; line-height: 1.3;">{data['detail']}</p>
+                </div>
+                """, unsafe_allow_html=True)
+                
+    # --- Tab 2: 行业痛点与解法 (专业) ---
+    with tab2:
+        st.subheader("2.1 垂直行业痛点分析与解法矩阵")
+        st.markdown("这是**高意向转化**的关键，素材必须直击行业刚需，展现专业性和排他性。")
 
-    # 行业痛点数据 (基于用户思维导图 - 行业痛点)
-    industry_data = [
-        {
-            "行业": "化工新材料", 
-            "痛点 (挑战)": "危化品储存难；环保审批流程长，成本高。", 
-            "解决方案 (素材主题)": "**安全合规专区：** 拥有**专业危化品储存设施**和**专有环评通道**，大幅降低合规难度和时间成本。"
-        },
-        {
-            "行业": "精密制造", 
-            "痛点 (挑战)": "设备需恒温恒湿，生产环境要求高；电力不稳定或承重不匹配。", 
-            "解决方案 (素材主题)": "**高标基础设施：** 提供**高标准洁净车间**、**双回路供电**保障（避免停电）、以及**特种承重楼板**（满足重型设备）。"
-        },
-        {
-            "行业": "美妆医疗器械", 
-            "痛点 (挑战)": "必须满足 GMP/GSP 洁净要求；品牌形象需匹配高端市场。", 
-            "解决方案 (素材主题)": "**认证级厂房：** 现成**通过 GMP 认证**的洁净车间（即刻投产）；园区形象高端，助力企业**品牌升级**。"
-        }
-    ]
-    
-    # 将数据转换为 DataFrame 用于 Streamlit 展示
-    df_industry = pd.DataFrame(industry_data)
-    st.dataframe(
-        df_industry.style.set_properties(**{'font-size': '14px', 'text-align': 'left'})
-                        .set_table_styles([{'selector': 'th', 'props': [('background-color', '#4ECDC4'), ('color', 'white')]}]),
-        use_container_width=True,
-        hide_index=True
-    )
+        industry_data = [
+            {
+                "行业": "化工新材料", 
+                "核心痛点": "危化品储存/生产合规难；环评审批慢且成本高。", 
+                "我们的解法 (卖点)": "**安全合规专区：** **专属的危化品储存设施**，协助企业**一站式完成环评**，快速投产。",
+                "素材/脚本主题": "《为什么您的环评总不过？看我们如何 30 天拿证》"
+            },
+            {
+                "行业": "精密制造/高耗能", 
+                "核心痛点": "电力不稳定影响生产；设备需超重承载和高洁净度。", 
+                "我们的解法 (卖点)": "**高标准基础设施：** **双回路供电**（99.99%稳定供电），**4T/㎡楼板承重**，提供**超洁净生产环境**。",
+                "素材/脚本主题": "《重型设备福音：双回路供电让您的生产永不宕机》"
+            },
+            {
+                "行业": "美妆/医疗器械", 
+                "核心痛点": "严格的 GMP/GSP 认证要求；园区形象与品牌不匹配。", 
+                "我们的解法 (卖点)": "**品牌认证级厂房：** 现成**通过国家认证**的洁净车间，**高端园区设计**，助力品牌形象升级。",
+                "素材/脚本主题": "《美妆新国货：拎包入住 GMP 认证工厂的秘密》"
+            }
+        ]
+        
+        # 将数据转换为 DataFrame 用于 Streamlit 展示
+        df_industry = pd.DataFrame(industry_data)
+        st.dataframe(
+            df_industry.style.set_properties(**{'font-size': '14px', 'text-align': 'left'})
+                            .set_table_styles([{'selector': 'th', 'props': [('background-color', '#4ECDC4'), ('color', 'white'), ('font-size', '14px')]}]),
+            use_container_width=True,
+            hide_index=True
+        )
 
-    st.markdown("---")
+    # --- Tab 3: 创意主题与脚本 (落地) ---
+    with tab3:
+        st.subheader("3.1 核心创意主题与脚本结构建议")
+        st.markdown("此表为**视频制作团队**提供直接的素材主题和制作模板。")
 
-    # --- 模块 3: 创意策略与 AIPL 转化指导 ---
-    st.subheader("3️⃣ 创意内容与营销漏斗 (AIPL) 策略")
-    st.markdown("将上述逻辑点映射到具体的营销阶段，确保每个阶段的素材目标明确。")
+        creative_themes = [
+            {"主题类型": "价格/促销 (通用)", "逻辑切入点": "成本优势/首付政策", "脚本结构": "痛点（高房租）→ 解决方案（园区低价）→ 稀缺性（政策福利）→ CTA（立即咨询）。"},
+            {"主题类型": "实景展示 (通用)", "逻辑切入点": "配套实力/区位", "脚本结构": "航拍（宏大叙事）→ 核心配套（电力、承重）细节特写 → 园区生活场景 → CTA（预约到访）。"},
+            {"主题类型": "行业专业解说 (行业痛点)", "逻辑切入点": "痛点解法（如：环评）", "脚本结构": "抛出行业尖锐痛点（**化工合规太难**）→ 专家访谈或动画演示解法（**展示我们独有资质**）→ 成功案例对比 → CTA（获取白皮书）。"},
+            {"主题类型": "客户证言 (信任)", "逻辑切入点": "成功案例/服务过程", "脚本结构": "客户入驻前后的对比 → 客户亲自讲述**解决了哪些实际问题** → 感谢和推荐 → CTA（与我们联系）。"}
+        ]
+        
+        df_creative = pd.DataFrame(creative_themes)
+        st.table(df_creative)
+        
+        st.caption("🚀 建议：高成本投入的素材应侧重于**行业专业解说**，以获取高价值线索。")
 
-    strategy_data = [
-        {"阶段": "A - 认知 (Awareness)", "素材类型": "通用类（成本、区位、实力）", "内容目标": "广撒网，吸引注意，**解决『空间/成本』痛点**。", "投放渠道": "信息流、大众媒体"},
-        {"阶段": "I - 兴趣 (Interest)", "素材类型": "通用类（资产属性、生态、案例）", "内容目标": "展示长期价值，**建立初步信任**，引导用户点击。", "投放渠道": "专业公众号、垂直论坛、知乎"},
-        {"阶段": "P - 购买 (Purchase)", "素材类型": "行业痛点与解法（**高专业度**）", "内容目标": "提供精准的行业解决方案，**促使留资/电话**（高意向）。", "投放渠道": "搜索引擎 (高意向关键词)、行业展会、再营销"},
-        {"阶段": "L - 忠诚 (Loyalty)", "素材类型": "服务政策、金融方案、问题解决过程", "内容目标": "提供临门一脚的保障，**促进到访和成交**。", "投放渠道": "销售跟进材料、私域社群"}
-    ]
-    
-    df_strategy = pd.DataFrame(strategy_data)
-    st.table(df_strategy)
+    # --- Tab 4: 策略与漏斗应用 (指导) ---
+    with tab4:
+        st.subheader("4.1 推广逻辑在 AIPL 营销漏斗中的应用")
+        st.markdown("确保营销资源投入与客户所处的转化阶段精确匹配。")
 
-
-# --- [generate_creative_charts 结束] ---
+        strategy_data = [
+            {"AIPL 阶段": "A - 认知 (Awareness)", "核心目标": "**扩大触达，制造话题**", "应用逻辑": "成本优势、低门槛金融（**通用价值**）", "内容形式": "大众信息流短视频、促销海报"},
+            {"AIPL 阶段": "I - 兴趣 (Interest)", "核心目标": "筛选意向客户，**建立品牌认知**", "应用逻辑": "资产投资属性、园区配套实力（**通用价值**）", "内容形式": "专业公众号文章、园区航拍大片、成功案例集"},
+            {"AIPL 阶段": "P - 购买 (Purchase)", "核心目标": "**精准转化线索，促使留资**", "应用逻辑": "垂直行业痛点与独家解法（**行业痛点**）", "内容形式": "高专业度问答、白皮书下载、垂直媒体广告、搜索广告"},
+            {"AIPL 阶段": "L - 忠诚 (Loyalty)", "核心目标": "促进**到访和最终成交**", "应用逻辑": "软性服务、金融方案、问题解决过程（**通用价值**）", "内容形式": "专属销售跟进材料、私域路演活动"}
+        ]
+        
+        df_strategy = pd.DataFrame(strategy_data)
+        st.table(df_strategy)
+        st.caption("✅ 投放检查点：检查 P 阶段素材（行业痛点）是否吸引了高意向线索，如果有效线索成本高，应回溯 A 和 I 阶段的通用素材是否覆盖面过广。")
 
 
 # ==================== 5. 侧边栏及主应用入口 (与原代码保持一致) ====================
@@ -780,7 +804,7 @@ if st.sidebar.button("➕ 创建新月份数据"):
 sales_tab, creative_tab, logic_tab, edit_tab = st.tabs([
     "💰 销售数据总览", 
     "🖼️ 广告素材效果分析",
-    "💡 推广逻辑与创意策略", # 🆕 新增的标签页
+    "💡 推广逻辑与创意策略", # 🆕 细分后的标签页
     "⚙️ 数据编辑"
 ])
 
@@ -790,9 +814,9 @@ with sales_tab:
 with creative_tab:
     generate_creative_charts(current_data)
 
-# 🆕 新标签页的调用
+# 🆕 新标签页的调用 V2
 with logic_tab:
-    generate_marketing_logic_page()
+    generate_marketing_logic_page_v2()
     
 with edit_tab:
     st.header(f"⚙️ {current_month} - 广告素材数据编辑")
