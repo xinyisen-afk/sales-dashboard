@@ -255,7 +255,9 @@ def create_pie_chart_for_reason(reasons_data_for_stage, title, cities):
                         specs=[[{"type": "pie"}] * cols_count] * rows_count)
     
     for i, city in enumerate(cities):
-        city_data = reasons_data.get(city, {})
+        # FIX: Changed reasons_data to reasons_data_for_stage to fix NameError.
+        city_data = reasons_data_for_stage.get(city, {}) 
+        
         # 饼图必须过滤掉 0 值，否则 Plotly 会报错或显示异常
         valid_data = {k: v for k, v in city_data.items() if v > 0 and k}
         reasons = list(valid_data.keys())
